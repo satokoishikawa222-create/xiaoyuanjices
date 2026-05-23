@@ -7148,21 +7148,46 @@ ${timeGapPrompt ? timeGapPrompt + '\n' : ''}`;
                         const args = JSON.parse(toolCall.function.arguments);
                         const query = args.query;
                         
-                        // 1. 尝试百度百科 API (支持CORS)
-                        try {
-                            const res = await fetch(`https://baike.baidu.com/api/openapi/BaikeLemmaCardApi?scope=103&format=json&appid=379020&bk_key=${encodeURIComponent(query)}&bk_length=600`);
-                            const data = await res.json();
-                            if (data && data.abstract) {
-                                searchResult = data.abstract;
+                        // 1. 尝试百度百科 API (使用 JSONP 绕过 CORS，并增加超时处理)
+                        searchResult = await new Promise((resolve) => {
+                            const callbackName = 'baike_cb_' + Date.now() + '_' + Math.floor(Math.random() * 10000);
+                            const script = document.createElement('script');
+                            const timer = setTimeout(() => {
+                                cleanup();
+                                resolve(null);
+                            }, 5000);
+                            
+                            function cleanup() {
+                                clearTimeout(timer);
+                                delete window[callbackName];
+                                if (script.parentNode) script.parentNode.removeChild(script);
                             }
-                        } catch (e) {
-                            console.log("百度百科查询失败", e);
-                        }
 
-                        if (!searchResult || searchResult === "未找到相关信息") {
-                            // 2. 尝试思知知识图谱 (支持CORS)
+                            window[callbackName] = (data) => {
+                                cleanup();
+                                if (data && data.abstract) {
+                                    resolve(data.abstract);
+                                } else {
+                                    resolve(null);
+                                }
+                            };
+                            
+                            script.onerror = () => {
+                                cleanup();
+                                resolve(null);
+                            };
+                            
+                            script.src = `https://baike.baidu.com/api/openapi/BaikeLemmaCardApi?scope=103&format=json&appid=379020&bk_key=${encodeURIComponent(query)}&bk_length=600&callback=${callbackName}`;
+                            document.head.appendChild(script);
+                        });
+
+                        if (!searchResult) {
+                            // 2. 尝试思知知识图谱 (支持CORS，增加超时处理)
                             try {
-                                const res = await fetch(`https://api.ownthink.com/kg/knowledge?entity=${encodeURIComponent(query)}`);
+                                const controller = new AbortController();
+                                const timeoutId = setTimeout(() => controller.abort(), 5000);
+                                const res = await fetch(`https://api.ownthink.com/kg/knowledge?entity=${encodeURIComponent(query)}`, { signal: controller.signal });
+                                clearTimeout(timeoutId);
                                 const searchData = await res.json();
                                 if (searchData.message === 'success' && searchData.data && searchData.data.desc) {
                                     searchResult = searchData.data.desc;
@@ -7171,17 +7196,39 @@ ${timeGapPrompt ? timeGapPrompt + '\n' : ''}`;
                                 console.log("思知知识图谱查询失败", e);
                             }
                             
-                            if (!searchResult || searchResult === "未找到相关信息") {
-                                // 3. 尝试360搜索建议 (支持CORS)
-                                try {
-                                    const res = await fetch(`https://sug.so.360.cn/suggest?word=${encodeURIComponent(query)}&encodein=utf-8&encodeout=utf-8&format=json`);
-                                    const data = await res.json();
-                                    if (data.result && data.result.length > 0) {
-                                        searchResult = "相关词条: " + data.result.map(item => item.word).join(', ');
+                            if (!searchResult) {
+                                // 3. 尝试360搜索建议 (使用 JSONP 绕过 CORS，并增加超时处理)
+                                searchResult = await new Promise((resolve) => {
+                                    const callbackName = 'jsonp_cb_' + Date.now() + '_' + Math.floor(Math.random() * 10000);
+                                    const script = document.createElement('script');
+                                    const timer = setTimeout(() => {
+                                        cleanup();
+                                        resolve("未找到相关信息");
+                                    }, 5000);
+                                    
+                                    function cleanup() {
+                                        clearTimeout(timer);
+                                        delete window[callbackName];
+                                        if (script.parentNode) script.parentNode.removeChild(script);
                                     }
-                                } catch (e) {
-                                    console.log("360搜索建议查询失败", e);
-                                }
+
+                                    window[callbackName] = (data) => {
+                                        cleanup();
+                                        if (data.result && data.result.length > 0) {
+                                            resolve("相关词条: " + data.result.map(item => item.word).join(', '));
+                                        } else {
+                                            resolve("未找到相关信息");
+                                        }
+                                    };
+                                    
+                                    script.onerror = () => {
+                                        cleanup();
+                                        resolve("未找到相关信息");
+                                    };
+                                    
+                                    script.src = `https://sug.so.360.cn/suggest?word=${encodeURIComponent(query)}&encodein=utf-8&encodeout=utf-8&format=json&callback=${callbackName}`;
+                                    document.head.appendChild(script);
+                                });
                             }
                         }
                     } catch (e) {
