@@ -548,161 +548,18 @@ async function smsTriggerAI(charId, userText, fakeSender, targetChatId) {
         prompt += `请直接输出你的短信回复内容（纯文本，不要 JSON，不要动作描写，就像真实的短信一样简短）。\n`;
         prompt += `【碎片化口语化强制指令】：必须像真人聊天一样，将长回复拆分成 ${rMin}-${rMax} 条短消息！严禁把所有话挤在一个气泡里！每条短消息之间请用换行符分隔。\n`;
 
-        let requestBody = {
-            model: apiConfig.model,
-            messages: [{ role: "user", content: prompt }],
-            temperature: 0.8,
-            tools: [
-                {
-                    type: "function",
-                    function: {
-                        name: "search_real_world",
-                        description: "查询真实世界的信息，例如百科知识、人物、事件等。当你需要了解你不知道的真实世界信息时调用此工具。",
-                        parameters: {
-                            type: "object",
-                            properties: {
-                                query: {
-                                    type: "string",
-                                    description: "要查询的关键词"
-                                }
-                            },
-                            required: ["query"]
-                        }
-                    }
-                }
-            ]
-        };
-
-        let response = await fetch(`${apiConfig.baseUrl}/chat/completions`, {
+        const response = await fetch(`${apiConfig.baseUrl}/chat/completions`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiConfig.key}` },
-            body: JSON.stringify(requestBody)
+            body: JSON.stringify({
+                model: apiConfig.model,
+                messages: [{ role: "user", content: prompt }],
+                temperature: 0.8
+            })
         });
 
-        let data = await response.json();
-        let replyMessage = data.choices[0].message;
-
-        // 处理 Tool Calls (MCP 功能)
-        if (replyMessage.tool_calls && replyMessage.tool_calls.length > 0) {
-            requestBody.messages.push(replyMessage);
-
-            for (const toolCall of replyMessage.tool_calls) {
-                if (toolCall.function.name === 'search_real_world') {
-                    let searchResult = "未找到相关信息";
-                    try {
-                        const args = JSON.parse(toolCall.function.arguments);
-                        const query = args.query;
-                        
-                        // 1. 尝试百度百科 API (使用 JSONP 绕过 CORS，并增加超时处理)
-                        searchResult = await new Promise((resolve) => {
-                            const callbackName = 'baike_cb_' + Date.now() + '_' + Math.floor(Math.random() * 10000);
-                            const script = document.createElement('script');
-                            const timer = setTimeout(() => {
-                                cleanup();
-                                resolve(null);
-                            }, 5000);
-                            
-                            function cleanup() {
-                                clearTimeout(timer);
-                                delete window[callbackName];
-                                if (script.parentNode) script.parentNode.removeChild(script);
-                            }
-
-                            window[callbackName] = (data) => {
-                                cleanup();
-                                if (data && data.abstract) {
-                                    resolve(data.abstract);
-                                } else {
-                                    resolve(null);
-                                }
-                            };
-                            
-                            script.onerror = () => {
-                                cleanup();
-                                resolve(null);
-                            };
-                            
-                            script.src = `https://baike.baidu.com/api/openapi/BaikeLemmaCardApi?scope=103&format=json&appid=379020&bk_key=${encodeURIComponent(query)}&bk_length=600&callback=${callbackName}`;
-                            document.head.appendChild(script);
-                        });
-
-                        if (!searchResult) {
-                            // 2. 尝试思知知识图谱 (支持CORS，增加超时处理)
-                            try {
-                                const controller = new AbortController();
-                                const timeoutId = setTimeout(() => controller.abort(), 5000);
-                                const res = await fetch(`https://api.ownthink.com/kg/knowledge?entity=${encodeURIComponent(query)}`, { signal: controller.signal });
-                                clearTimeout(timeoutId);
-                                const searchData = await res.json();
-                                if (searchData.message === 'success' && searchData.data && searchData.data.desc) {
-                                    searchResult = searchData.data.desc;
-                                }
-                            } catch (e) {
-                                console.log("思知知识图谱查询失败", e);
-                            }
-                            
-                            if (!searchResult) {
-                                // 3. 尝试360搜索建议 (使用 JSONP 绕过 CORS，并增加超时处理)
-                                searchResult = await new Promise((resolve) => {
-                                    const callbackName = 'jsonp_cb_' + Date.now() + '_' + Math.floor(Math.random() * 10000);
-                                    const script = document.createElement('script');
-                                    const timer = setTimeout(() => {
-                                        cleanup();
-                                        resolve("未找到相关信息");
-                                    }, 5000);
-                                    
-                                    function cleanup() {
-                                        clearTimeout(timer);
-                                        delete window[callbackName];
-                                        if (script.parentNode) script.parentNode.removeChild(script);
-                                    }
-
-                                    window[callbackName] = (data) => {
-                                        cleanup();
-                                        if (data.result && data.result.length > 0) {
-                                            resolve("相关词条: " + data.result.map(item => item.word).join(', '));
-                                        } else {
-                                            resolve("未找到相关信息");
-                                        }
-                                    };
-                                    
-                                    script.onerror = () => {
-                                        cleanup();
-                                        resolve("未找到相关信息");
-                                    };
-                                    
-                                    script.src = `https://sug.so.360.cn/suggest?word=${encodeURIComponent(query)}&encodein=utf-8&encodeout=utf-8&format=json&callback=${callbackName}`;
-                                    document.head.appendChild(script);
-                                });
-                            }
-                        }
-                    } catch (e) {
-                        searchResult = "查询失败: " + e.message;
-                    }
-                    
-                    requestBody.messages.push({
-                        role: "tool",
-                        tool_call_id: toolCall.id,
-                        name: toolCall.function.name,
-                        content: searchResult
-                    });
-                }
-            }
-
-            // 再次请求 API
-            response = await fetch(`${apiConfig.baseUrl}/chat/completions`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${apiConfig.key}`
-                },
-                body: JSON.stringify(requestBody)
-            });
-            data = await response.json();
-            replyMessage = data.choices[0].message;
-        }
-
-        let replyText = replyMessage.content.replace(/<thinking>[\s\S]*?<\/thinking>/g, '').trim();
+        const data = await response.json();
+        let replyText = data.choices[0].message.content.replace(/<thinking>[\s\S]*?<\/thinking>/g, '').trim();
 
         // 👈 核心修复：将 AI 的回复精准推入触发它的那个会话中
         const chat = smsState.chats.find(c => c.id === targetChatId);

@@ -222,6 +222,14 @@
                         </div>
                         <div class="app-name" id="name-6" style="display:none">世界书</div>
                     </div>
+
+                    <!-- App 7: Reading App -->
+                    <div class="app-item" id="app-7" onclick="openReadingApp()">
+                        <div class="app-icon" id="icon-7">
+                            <svg class="default-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
+                        </div>
+                        <div class="app-name" id="name-7" style="display:none">阅读</div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1205,7 +1213,139 @@
 
             </div>
         </div>
-                <!-- ========================================== -->
+        <!-- ========================================== -->
+        <!-- App 7: Reading App (阅读) -->
+        <!-- ========================================== -->
+        <div class="settings-modal" id="readingAppModal" style="padding: 0; z-index: 3500; background: #F9F9F9;">
+            <div id="reading-root" style="width: 100%; height: 100%; position: relative; display: flex; flex-direction: column;">
+                
+                <!-- 视图 1：书架页面 -->
+                <div id="reading-view-bookshelf" class="reading-view active" style="flex: 1; display: flex; flex-direction: column; background: #F9F9F9;">
+                    <div class="reading-header" style="padding: calc(env(safe-area-inset-top, 20px) + 15px) 20px 15px; display: flex; justify-content: space-between; align-items: center; background: #F9F9F9; position: sticky; top: 0; z-index: 10;">
+                        <div style="font-size: 24px; font-weight: 800; color: #111; letter-spacing: -0.5px;">Library</div>
+                        <div class="reading-header-actions" style="display: flex; gap: 15px;">
+                            <svg onclick="closeReadingApp()" viewBox="0 0 24 24" style="width: 24px; height: 24px; stroke: #111; fill: none; stroke-width: 2; cursor: pointer;"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                        </div>
+                    </div>
+                    <div class="reading-bookshelf-grid" id="reading-bookshelf-grid" style="padding: 10px 20px 40px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px 15px; overflow-y: auto; flex: 1;">
+                        <!-- 书本卡片由 JS 注入 -->
+                    </div>
+                </div>
+
+                <!-- 视图 2：阅读页面 -->
+                <div id="reading-view-reader" class="reading-view" style="display: none; flex: 1; flex-direction: column; background: #F4F1EA; position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 20;">
+                    <!-- 顶部栏 (阅读时默认隐藏，点击中间呼出) -->
+                    <div class="reader-top-bar" id="reader-top-bar" style="position: absolute; top: 0; left: 0; width: 100%; padding: calc(env(safe-area-inset-top, 20px) + 10px) 20px 10px; display: flex; justify-content: space-between; align-items: center; background: rgba(244, 241, 234, 0.95); backdrop-filter: blur(10px); z-index: 30; transform: translateY(-100%); transition: transform 0.3s ease; box-sizing: border-box;">
+                        <div style="display: flex; align-items: center; gap: 12px; cursor: pointer;" onclick="readingExitReader()">
+                            <svg viewBox="0 0 24 24" style="width: 20px; height: 20px; stroke: #111; fill: none; stroke-width: 2;"><polyline points="15 18 9 12 15 6"></polyline></svg>
+                            <span id="reader-book-title-display" style="font-size: 15px; font-weight: 600; color: #111; max-width: 150px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">书名</span>
+                        </div>
+                        <img src="" id="reader-char-avatar" style="width: 28px; height: 28px; border-radius: 50%; object-fit: cover; border: 1px solid #EAEAEA;">
+                    </div>
+
+                    <!-- 正文区域 -->
+                    <div class="reader-content-area" id="reader-content-area" style="flex: 1; padding: 0 24px; overflow-y: auto; font-size: 18px; line-height: 1.8; color: #333; text-align: justify; padding-top: calc(env(safe-area-inset-top, 20px) + 20px); padding-bottom: 40px; scroll-behavior: smooth;">
+                        <!-- 正文由 JS 注入 -->
+                    </div>
+
+                    <!-- 隐形点击区域 (中间呼出菜单) -->
+                    <div class="reader-click-zone" onclick="readingToggleMenu()" style="position: absolute; top: 20%; left: 20%; width: 60%; height: 60%; z-index: 25;"></div>
+
+                    <!-- 底部菜单栏 -->
+                    <div class="reader-bottom-menu" id="reader-bottom-menu" style="position: absolute; bottom: 0; left: 0; width: 100%; background: rgba(244, 241, 234, 0.95); backdrop-filter: blur(10px); z-index: 30; transform: translateY(100%); transition: transform 0.3s ease; padding-bottom: env(safe-area-inset-bottom, 20px); box-shadow: 0 -4px 20px rgba(0,0,0,0.05);">
+                        
+                        <!-- 第一行：数据统计 -->
+                        <div style="display: flex; justify-content: space-between; padding: 20px 24px 15px; border-bottom: 1px solid rgba(0,0,0,0.05);">
+                            <div style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
+                                <span id="reader-stat-time" style="font-size: 16px; font-weight: 700; color: #111; font-family: monospace;">0</span>
+                                <span style="font-size: 10px; color: #888;">阅读时长(分)</span>
+                            </div>
+                            <div style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
+                                <span id="reader-stat-progress" style="font-size: 16px; font-weight: 700; color: #111; font-family: monospace;">0.00%</span>
+                                <span style="font-size: 10px; color: #888;">阅读进度</span>
+                            </div>
+                            <div style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
+                                <span id="reader-stat-speed" style="font-size: 16px; font-weight: 700; color: #111; font-family: monospace;">0</span>
+                                <span style="font-size: 10px; color: #888;">阅读速度(字/分)</span>
+                            </div>
+                            <div style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
+                                <span id="reader-stat-notes" style="font-size: 16px; font-weight: 700; color: #111; font-family: monospace;">0</span>
+                                <span style="font-size: 10px; color: #888;">笔记数量</span>
+                            </div>
+                        </div>
+
+                        <!-- 第二行：进度条与章节切换 -->
+                        <div style="display: flex; align-items: center; gap: 15px; padding: 15px 24px;">
+                            <svg onclick="readingPrevChapter()" viewBox="0 0 24 24" style="width: 20px; height: 20px; stroke: #111; fill: none; stroke-width: 2; cursor: pointer; flex-shrink: 0;"><polyline points="15 18 9 12 15 6"></polyline></svg>
+                            <input type="range" id="reader-progress-slider" min="0" max="100" value="0" step="0.01" style="flex: 1; accent-color: #111; height: 4px;" onchange="readingSeekProgress(this.value)">
+                            <svg onclick="readingNextChapter()" viewBox="0 0 24 24" style="width: 20px; height: 20px; stroke: #111; fill: none; stroke-width: 2; cursor: pointer; flex-shrink: 0;"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                        </div>
+
+                        <!-- 第三行：功能按钮 -->
+                        <div style="display: flex; justify-content: space-between; padding: 10px 30px 20px;">
+                            <div style="display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: pointer;" onclick="readingOpenToc()">
+                                <svg viewBox="0 0 24 24" style="width: 22px; height: 22px; stroke: #111; fill: none; stroke-width: 1.5;"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
+                                <span style="font-size: 11px; color: #111;">目录</span>
+                            </div>
+                            <div style="display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: pointer;" onclick="readingOpenNotes()">
+                                <svg viewBox="0 0 24 24" style="width: 22px; height: 22px; stroke: #111; fill: none; stroke-width: 1.5;"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+                                <span style="font-size: 11px; color: #111;">笔记</span>
+                            </div>
+                            <div style="display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: pointer;" onclick="readingToggleNightMode()">
+                                <svg id="reader-icon-night" viewBox="0 0 24 24" style="width: 22px; height: 22px; stroke: #111; fill: none; stroke-width: 1.5;"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+                                <span id="reader-text-night" style="font-size: 11px; color: #111;">夜间</span>
+                            </div>
+                            <div style="display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: pointer;" onclick="readingOpenSettings()">
+                                <svg viewBox="0 0 24 24" style="width: 22px; height: 22px; stroke: #111; fill: none; stroke-width: 1.5;"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                                <span style="font-size: 11px; color: #111;">设置</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 目录弹窗 -->
+                <div id="reading-modal-toc" class="wc-modal hidden" style="z-index: 3600; align-items: flex-end;">
+                    <div class="wc-modal-content" style="height: 70vh; border-radius: 20px 20px 0 0; width: 100%; max-width: 100%; background: #FFF; display: flex; flex-direction: column;">
+                        <div class="wc-modal-header" style="border-bottom: 1px solid #F0F0F0; padding: 20px;">
+                            <h3 style="color: #111; font-size: 18px; font-weight: 700;">目录</h3>
+                            <button class="wc-close-btn" onclick="wcCloseModal('reading-modal-toc')">&times;</button>
+                        </div>
+                        <div class="wc-modal-body" id="reading-toc-list" style="flex: 1; overflow-y: auto; padding: 0;">
+                            <!-- 目录列表由 JS 注入 -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 笔记列表弹窗 -->
+                <div id="reading-modal-notes" class="wc-modal hidden" style="z-index: 3600; align-items: flex-end;">
+                    <div class="wc-modal-content" style="height: 70vh; border-radius: 20px 20px 0 0; width: 100%; max-width: 100%; background: #FFF; display: flex; flex-direction: column;">
+                        <div class="wc-modal-header" style="border-bottom: 1px solid #F0F0F0; padding: 20px;">
+                            <h3 style="color: #111; font-size: 18px; font-weight: 700;">全书笔记</h3>
+                            <button class="wc-close-btn" onclick="wcCloseModal('reading-modal-notes')">&times;</button>
+                        </div>
+                        <div class="wc-modal-body" id="reading-notes-list" style="flex: 1; overflow-y: auto; padding: 15px 20px; background: #FAFAFA;">
+                            <!-- 笔记列表由 JS 注入 -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 添加笔记弹窗 -->
+                <div id="reading-modal-add-note" class="wc-modal hidden" style="z-index: 3700; align-items: center; justify-content: center;">
+                    <div class="wc-modal-content" style="width: 85%; max-width: 320px; border-radius: 16px; background: #FFF; padding: 20px;">
+                        <h3 style="margin-top: 0; margin-bottom: 15px; font-size: 18px; color: #111; text-align: center;">添加笔记</h3>
+                        <div style="font-size: 12px; color: #888; margin-bottom: 10px;" id="reading-note-context">当前位置：...</div>
+                        <textarea id="reading-note-input" class="wc-form-textarea" placeholder="写下你的想法..." style="height: 100px; background: #F9F9F9; border: 1px solid #EAEAEA; margin-bottom: 15px;"></textarea>
+                        <div style="display: flex; gap: 10px;">
+                            <button class="wc-btn-secondary" style="flex: 1; margin: 0; border-radius: 12px; padding: 12px; font-weight: bold;" onclick="wcCloseModal('reading-modal-add-note')">取消</button>
+                            <button class="wc-btn-primary" style="flex: 1; margin: 0; border-radius: 12px; padding: 12px; background: #111; font-weight: bold;" onclick="readingSaveNote()">保存</button>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- ========================================== -->
         <!-- App 8: 短信 (iMessage) 容器 -->
         <!-- ========================================== -->
         <div class="settings-modal" id="smsModal" style="padding: 0; z-index: 3500; background: #000;">
@@ -7965,6 +8105,131 @@
         </div>
     </div>
     <!-- 👆 新增结束 👆 -->
+
+    <!-- ========================================== -->
+    <!-- Reading App (阅读) -->
+    <!-- ========================================== -->
+    
+    <!-- 书架页面 -->
+    <div id="reading-bookshelf-view" class="app-view reading-view" style="display: none; background: #F9F9F9; z-index: 100;">
+        <div class="ios-header" style="background: rgba(249,249,249,0.8); backdrop-filter: blur(10px); border-bottom: none;">
+            <div class="ios-header-left" onclick="closeReadingApp()">
+                <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+            </div>
+            <div class="ios-header-title" style="font-weight: 600; color: #111;">书架</div>
+            <div class="ios-header-right"></div>
+        </div>
+        <div class="ios-content" style="padding: 20px;">
+            <div id="reading-books-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                <!-- 书本卡片将由 JS 动态生成 -->
+            </div>
+        </div>
+    </div>
+
+    <!-- 阅读页面 -->
+    <div id="reading-reader-view" class="app-view reading-view" style="display: none; background: #F4F3F0; z-index: 101;">
+        <!-- 顶部栏 -->
+        <div id="reader-top-bar" class="reader-top-bar" style="position: absolute; top: 0; left: 0; right: 0; height: 60px; background: rgba(244,243,240,0.95); backdrop-filter: blur(10px); display: flex; align-items: center; justify-content: space-between; padding: 0 15px; z-index: 10; transform: translateY(-100%); transition: transform 0.3s ease;">
+            <div onclick="closeReader()" style="padding: 10px; cursor: pointer;">
+                <svg viewBox="0 0 24 24" width="24" height="24" stroke="#111" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+            </div>
+            <div id="reader-book-title" style="font-size: 16px; font-weight: 500; color: #111;">书名</div>
+            <div style="width: 32px; height: 32px; border-radius: 50%; background: #DDD; overflow: hidden;">
+                <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=reader" style="width: 100%; height: 100%; object-fit: cover;">
+            </div>
+        </div>
+
+        <!-- 阅读内容区 -->
+        <div id="reader-content-area" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; padding: 60px 24px; overflow-y: auto; font-size: 18px; line-height: 1.8; color: #333; text-align: justify;" onclick="toggleReaderMenu(event)">
+            <!-- 正文内容将由 JS 动态生成 -->
+        </div>
+
+        <!-- 底部菜单栏 -->
+        <div id="reader-bottom-menu" class="reader-bottom-menu" style="position: absolute; bottom: 0; left: 0; right: 0; background: rgba(255,255,255,0.95); backdrop-filter: blur(10px); padding: 20px 15px 30px; z-index: 10; transform: translateY(100%); transition: transform 0.3s ease; box-shadow: 0 -2px 15px rgba(0,0,0,0.05);">
+            
+            <!-- 第一行：统计信息 -->
+            <div style="display: flex; justify-content: space-between; margin-bottom: 25px; padding: 0 10px;">
+                <div style="text-align: center;">
+                    <div id="reader-stat-time" style="font-size: 16px; font-weight: 600; color: #111;">0</div>
+                    <div style="font-size: 11px; color: #888; margin-top: 4px;">阅读时长(分)</div>
+                </div>
+                <div style="text-align: center;">
+                    <div id="reader-stat-progress" style="font-size: 16px; font-weight: 600; color: #111;">0.00%</div>
+                    <div style="font-size: 11px; color: #888; margin-top: 4px;">阅读进度</div>
+                </div>
+                <div style="text-align: center;">
+                    <div id="reader-stat-speed" style="font-size: 16px; font-weight: 600; color: #111;">0</div>
+                    <div style="font-size: 11px; color: #888; margin-top: 4px;">阅读速度(字/分)</div>
+                </div>
+                <div style="text-align: center;">
+                    <div id="reader-stat-notes" style="font-size: 16px; font-weight: 600; color: #111;">0</div>
+                    <div style="font-size: 11px; color: #888; margin-top: 4px;">笔记数量</div>
+                </div>
+            </div>
+
+            <!-- 第二行：进度条和章节切换 -->
+            <div style="display: flex; align-items: center; margin-bottom: 25px; gap: 15px;">
+                <div onclick="readerPrevChapter()" style="padding: 5px; cursor: pointer; color: #555;">
+                    <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+                </div>
+                <input type="range" id="reader-progress-slider" min="0" max="100" value="0" step="0.01" style="flex: 1; height: 4px; background: #E0E0E0; border-radius: 2px; outline: none;" oninput="readerSeekProgress(this.value)">
+                <div onclick="readerNextChapter()" style="padding: 5px; cursor: pointer; color: #555;">
+                    <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                </div>
+            </div>
+
+            <!-- 第三行：功能按钮 -->
+            <div style="display: flex; justify-content: space-around;">
+                <div onclick="openReaderToc()" style="display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: pointer;">
+                    <svg viewBox="0 0 24 24" width="22" height="22" stroke="#333" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
+                    <span style="font-size: 11px; color: #555;">目录</span>
+                </div>
+                <div onclick="openReaderNotes()" style="display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: pointer;">
+                    <svg viewBox="0 0 24 24" width="22" height="22" stroke="#333" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+                    <span style="font-size: 11px; color: #555;">笔记</span>
+                </div>
+                <div onclick="toggleReaderNightMode()" style="display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: pointer;">
+                    <svg id="reader-night-icon" viewBox="0 0 24 24" width="22" height="22" stroke="#333" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+                    <span id="reader-night-text" style="font-size: 11px; color: #555;">夜间</span>
+                </div>
+                <div onclick="openReaderSettings()" style="display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: pointer;">
+                    <svg viewBox="0 0 24 24" width="22" height="22" stroke="#333" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                    <span style="font-size: 11px; color: #555;">设置</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 目录弹窗 -->
+    <div class="dream-modal-overlay" id="reader-toc-modal" style="align-items: flex-end; justify-content: center;" onclick="if(event.target===this) closeReaderToc()">
+        <div style="width: 100%; max-width: 400px; height: 70vh; background: #FFF; border-top-left-radius: 20px; border-top-right-radius: 20px; display: flex; flex-direction: column; transform: translateY(100%); transition: transform 0.3s ease;" id="reader-toc-container">
+            <div style="padding: 20px; border-bottom: 1px solid #F0F0F0; display: flex; justify-content: space-between; align-items: center;">
+                <div style="font-size: 16px; font-weight: 600; color: #111;">目录</div>
+                <div onclick="closeReaderToc()" style="cursor: pointer; color: #888;">
+                    <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </div>
+            </div>
+            <div id="reader-toc-list" style="flex: 1; overflow-y: auto; padding: 10px 0;">
+                <!-- 目录项由 JS 动态生成 -->
+            </div>
+        </div>
+    </div>
+
+    <!-- 笔记弹窗 -->
+    <div class="dream-modal-overlay" id="reader-notes-modal" style="align-items: flex-end; justify-content: center;" onclick="if(event.target===this) closeReaderNotes()">
+        <div style="width: 100%; max-width: 400px; height: 70vh; background: #FFF; border-top-left-radius: 20px; border-top-right-radius: 20px; display: flex; flex-direction: column; transform: translateY(100%); transition: transform 0.3s ease;" id="reader-notes-container">
+            <div style="padding: 20px; border-bottom: 1px solid #F0F0F0; display: flex; justify-content: space-between; align-items: center;">
+                <div style="font-size: 16px; font-weight: 600; color: #111;">笔记</div>
+                <div onclick="closeReaderNotes()" style="cursor: pointer; color: #888;">
+                    <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </div>
+            </div>
+            <div id="reader-notes-list" style="flex: 1; overflow-y: auto; padding: 20px;">
+                <!-- 笔记项由 JS 动态生成 -->
+            </div>
+        </div>
+    </div>
+
 <!-- 总结选项弹窗 -->
 <div class="dream-modal-overlay" id="dream-summary-modal" style="align-items: center;" onclick="if(event.target===this) closeDreamSummaryModal()">
     <div class="dream-preset-paper" style="width: 85%; max-width: 320px; padding: 24px; border-radius: 16px; border: 1px solid #EAEAEA; box-shadow: 0 20px 40px rgba(0,0,0,0.1); background: #FFF;">
@@ -7996,6 +8261,187 @@
             <button class="dream-btn-secondary" style="width: 100%; border-radius: 12px; padding: 12px; font-size: 14px;" onclick="closeDreamModelSelectModal()">取消</button>
         </div>
     </div>
+</div>
+
+<!-- ========================================== -->
+<!-- App 7: Reading App (阅读) -->
+<!-- ========================================== -->
+<div class="settings-modal" id="readingAppModal2" style="padding: 0; z-index: 4000; background: #F5F5F7;">
+    
+    <!-- 1. 书架页面 -->
+    <div id="reading-view-bookshelf" class="reading-view active" style="height: 100%; display: flex; flex-direction: column;">
+        <div class="reading-navbar" style="padding: 50px 20px 15px 20px; display: flex; justify-content: space-between; align-items: center; background: #F5F5F7;">
+            <div class="reading-nav-title" style="font-size: 28px; font-weight: 700; color: #111; letter-spacing: 1px;">书架</div>
+            <div class="reading-nav-btn" onclick="closeReadingApp()" style="font-size: 15px; color: #888; cursor: pointer;">关闭</div>
+        </div>
+        
+        <div class="reading-bookshelf-content" style="flex: 1; overflow-y: auto; padding: 10px 20px 40px 20px;">
+            <div class="reading-book-grid" id="reading-book-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px;">
+                <!-- 书本卡片由 JS 动态生成 -->
+            </div>
+            
+            <!-- 导入本地书籍按钮 -->
+            <div style="margin-top: 30px; text-align: center;">
+                <button class="reading-btn-outline" onclick="document.getElementById('reading-import-input').click()" style="padding: 12px 24px; border-radius: 20px; border: 1px solid #DDD; background: transparent; color: #555; font-size: 14px; cursor: pointer;">+ 导入本地书籍 (TXT)</button>
+                <input type="file" id="reading-import-input" accept=".txt" style="display: none;" onchange="importLocalBook(event)">
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. 阅读页面 -->
+    <div id="reading-view-reader" class="reading-view" style="height: 100%; background: #F4F1EA; display: none; flex-direction: column; position: relative;">
+        <!-- 顶部状态栏 (阅读时显示) -->
+        <div class="reading-reader-header" id="reading-reader-header" style="padding: 45px 20px 10px 20px; display: flex; justify-content: space-between; align-items: center; opacity: 0.6; transition: opacity 0.3s;">
+            <div onclick="closeReadingPage()" style="cursor: pointer; display: flex; align-items: center; color: #555;">
+                <svg viewBox="0 0 24 24" style="width: 20px; height: 20px; stroke: currentColor; stroke-width: 2; fill: none;"><polyline points="15 18 9 12 15 6"></polyline></svg>
+            </div>
+            <div id="reading-current-book-title" style="font-size: 12px; color: #888; font-weight: 500; letter-spacing: 1px;">书名</div>
+            <div class="reading-char-avatar" style="width: 24px; height: 24px; border-radius: 50%; background: #DDD; overflow: hidden;">
+                <img id="reading-char-avatar-img" src="" style="width: 100%; height: 100%; object-fit: cover; display: none;">
+            </div>
+        </div>
+
+        <!-- 正文区域 -->
+        <div class="reading-content-area" id="reading-content-area" style="flex: 1; overflow-y: auto; padding: 0 24px; font-size: 18px; line-height: 1.8; color: #333; text-align: justify; padding-bottom: 60px;" onclick="toggleReadingMenu(event)">
+            <!-- 正文内容由 JS 注入 -->
+        </div>
+
+        <!-- 底部进度条 (阅读时显示) -->
+        <div class="reading-reader-footer" id="reading-reader-footer" style="padding: 10px 24px 20px 24px; display: flex; justify-content: space-between; font-size: 11px; color: #999; opacity: 0.6;">
+            <span id="reading-battery-time">12:00</span>
+            <span id="reading-progress-text">0.00%</span>
+        </div>
+
+        <!-- 阅读菜单栏 (点击中间弹出) -->
+        <div id="reading-menu-overlay" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: transparent; display: none; z-index: 100;" onclick="toggleReadingMenu(event)">
+            
+            <!-- 顶部菜单 -->
+            <div class="reading-menu-top" id="reading-menu-top" style="position: absolute; top: 0; left: 0; width: 100%; background: rgba(255,255,255,0.95); backdrop-filter: blur(10px); padding: 45px 20px 15px 20px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 1px 10px rgba(0,0,0,0.05); transform: translateY(-100%); transition: transform 0.3s ease;" onclick="event.stopPropagation()">
+                <div onclick="closeReadingPage()" style="cursor: pointer; display: flex; align-items: center; color: #111;">
+                    <svg viewBox="0 0 24 24" style="width: 24px; height: 24px; stroke: currentColor; stroke-width: 2; fill: none;"><polyline points="15 18 9 12 15 6"></polyline></svg>
+                </div>
+                <div style="display: flex; gap: 20px;">
+                    <svg viewBox="0 0 24 24" style="width: 22px; height: 22px; stroke: #111; stroke-width: 2; fill: none;" onclick="addReadingNote()"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+                    <svg viewBox="0 0 24 24" style="width: 22px; height: 22px; stroke: #111; stroke-width: 2; fill: none;" onclick="openReadingSettings()"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                </div>
+            </div>
+
+            <!-- 底部菜单 -->
+            <div class="reading-menu-bottom" id="reading-menu-bottom" style="position: absolute; bottom: 0; left: 0; width: 100%; background: rgba(255,255,255,0.95); backdrop-filter: blur(10px); padding: 20px 20px 30px 20px; border-radius: 20px 20px 0 0; box-shadow: 0 -1px 20px rgba(0,0,0,0.05); transform: translateY(100%); transition: transform 0.3s ease;" onclick="event.stopPropagation()">
+                
+                <!-- 第一行：数据统计 -->
+                <div style="display: flex; justify-content: space-between; margin-bottom: 25px; padding: 0 10px;">
+                    <div style="text-align: center;">
+                        <div id="reading-stat-time" style="font-size: 18px; font-weight: 600; color: #111;">0</div>
+                        <div style="font-size: 11px; color: #888; margin-top: 4px;">阅读时长(分)</div>
+                    </div>
+                    <div style="text-align: center;">
+                        <div id="reading-stat-progress" style="font-size: 18px; font-weight: 600; color: #111;">0.00%</div>
+                        <div style="font-size: 11px; color: #888; margin-top: 4px;">阅读进度</div>
+                    </div>
+                    <div style="text-align: center;">
+                        <div id="reading-stat-speed" style="font-size: 18px; font-weight: 600; color: #111;">0</div>
+                        <div style="font-size: 11px; color: #888; margin-top: 4px;">阅读速度(字/分)</div>
+                    </div>
+                    <div style="text-align: center;">
+                        <div id="reading-stat-notes" style="font-size: 18px; font-weight: 600; color: #111;">0</div>
+                        <div style="font-size: 11px; color: #888; margin-top: 4px;">笔记数量</div>
+                    </div>
+                </div>
+
+                <!-- 第二行：进度条与章节切换 -->
+                <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 25px;">
+                    <div onclick="readingPrevChapter()" style="cursor: pointer; color: #555; padding: 5px;">
+                        <svg viewBox="0 0 24 24" style="width: 20px; height: 20px; stroke: currentColor; stroke-width: 2; fill: none;"><polyline points="15 18 9 12 15 6"></polyline></svg>
+                    </div>
+                    <input type="range" id="reading-progress-slider" min="0" max="100" value="0" step="0.01" style="flex: 1; accent-color: #111; height: 4px;" oninput="readingSeekProgress(this.value)">
+                    <div onclick="readingNextChapter()" style="cursor: pointer; color: #555; padding: 5px;">
+                        <svg viewBox="0 0 24 24" style="width: 20px; height: 20px; stroke: currentColor; stroke-width: 2; fill: none;"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                    </div>
+                </div>
+
+                <!-- 第三行：功能按钮 -->
+                <div style="display: flex; justify-content: space-around; align-items: center;">
+                    <div onclick="openReadingToc()" style="display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: pointer; color: #333;">
+                        <svg viewBox="0 0 24 24" style="width: 22px; height: 22px; stroke: currentColor; stroke-width: 2; fill: none;"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
+                        <span style="font-size: 11px;">目录</span>
+                    </div>
+                    <div onclick="openReadingNotes()" style="display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: pointer; color: #333;">
+                        <svg viewBox="0 0 24 24" style="width: 22px; height: 22px; stroke: currentColor; stroke-width: 2; fill: none;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                        <span style="font-size: 11px;">笔记</span>
+                    </div>
+                    <div onclick="toggleReadingNightMode()" style="display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: pointer; color: #333;">
+                        <svg id="reading-night-icon" viewBox="0 0 24 24" style="width: 22px; height: 22px; stroke: currentColor; stroke-width: 2; fill: none;"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+                        <span id="reading-night-text" style="font-size: 11px;">夜间</span>
+                    </div>
+                    <div onclick="openReadingSettings()" style="display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: pointer; color: #333;">
+                        <svg viewBox="0 0 24 24" style="width: 22px; height: 22px; stroke: currentColor; stroke-width: 2; fill: none;"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                        <span style="font-size: 11px;">设置</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3. 目录侧边栏 -->
+    <div id="reading-toc-sidebar" style="position: absolute; top: 0; left: 0; width: 80%; height: 100%; background: #FFF; z-index: 200; transform: translateX(-100%); transition: transform 0.3s ease; display: flex; flex-direction: column; box-shadow: 2px 0 10px rgba(0,0,0,0.1);">
+        <div style="padding: 50px 20px 20px 20px; border-bottom: 1px solid #F0F0F0; display: flex; justify-content: space-between; align-items: center;">
+            <div style="font-size: 20px; font-weight: bold; color: #111;">目录</div>
+            <div onclick="closeReadingToc()" style="cursor: pointer; color: #888;">
+                <svg viewBox="0 0 24 24" style="width: 24px; height: 24px; stroke: currentColor; stroke-width: 2; fill: none;"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            </div>
+        </div>
+        <div id="reading-toc-list" style="flex: 1; overflow-y: auto; padding: 10px 0;">
+            <!-- 目录列表由 JS 注入 -->
+        </div>
+    </div>
+    <div id="reading-toc-overlay" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.3); z-index: 199; display: none; opacity: 0; transition: opacity 0.3s ease;" onclick="closeReadingToc()"></div>
+
+    <!-- 4. 笔记页面 -->
+    <div id="reading-notes-view" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #F5F5F7; z-index: 300; transform: translateY(100%); transition: transform 0.3s ease; display: flex; flex-direction: column;">
+        <div style="padding: 50px 20px 15px 20px; display: flex; justify-content: space-between; align-items: center; background: #FFF; border-bottom: 1px solid #F0F0F0;">
+            <div onclick="closeReadingNotes()" style="cursor: pointer; color: #111;">
+                <svg viewBox="0 0 24 24" style="width: 24px; height: 24px; stroke: currentColor; stroke-width: 2; fill: none;"><polyline points="15 18 9 12 15 6"></polyline></svg>
+            </div>
+            <div style="font-size: 18px; font-weight: bold; color: #111;">我的笔记</div>
+            <div style="width: 24px;"></div>
+        </div>
+        <div id="reading-notes-list" style="flex: 1; overflow-y: auto; padding: 20px;">
+            <!-- 笔记列表由 JS 注入 -->
+        </div>
+    </div>
+
+    <!-- 5. 设置弹窗 -->
+    <div id="reading-settings-modal" class="wc-modal hidden" style="z-index: 400; align-items: flex-end;">
+        <div class="wc-modal-content" style="border-radius: 24px 24px 0 0; background: #FFF; width: 100%; max-width: 100%; padding: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <div style="font-size: 18px; font-weight: bold; color: #111;">阅读设置</div>
+                <div onclick="wcCloseModal('reading-settings-modal')" style="cursor: pointer; color: #888;">
+                    <svg viewBox="0 0 24 24" style="width: 24px; height: 24px; stroke: currentColor; stroke-width: 2; fill: none;"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </div>
+            </div>
+            
+            <div style="margin-bottom: 20px;">
+                <div style="font-size: 14px; color: #555; margin-bottom: 10px;">字号大小</div>
+                <div style="display: flex; align-items: center; gap: 15px;">
+                    <button onclick="changeReadingFontSize(-1)" style="flex: 1; padding: 10px; border-radius: 10px; border: 1px solid #EAEAEA; background: #F9F9F9; font-size: 16px;">A-</button>
+                    <div id="reading-font-size-display" style="font-size: 16px; font-weight: bold; width: 40px; text-align: center;">18</div>
+                    <button onclick="changeReadingFontSize(1)" style="flex: 1; padding: 10px; border-radius: 10px; border: 1px solid #EAEAEA; background: #F9F9F9; font-size: 18px;">A+</button>
+                </div>
+            </div>
+            
+            <div style="margin-bottom: 20px;">
+                <div style="font-size: 14px; color: #555; margin-bottom: 10px;">背景颜色</div>
+                <div style="display: flex; gap: 15px;">
+                    <div onclick="changeReadingBg('#F4F1EA', '#333')" style="width: 40px; height: 40px; border-radius: 50%; background: #F4F1EA; border: 2px solid #DDD; cursor: pointer;"></div>
+                    <div onclick="changeReadingBg('#FFFFFF', '#333')" style="width: 40px; height: 40px; border-radius: 50%; background: #FFFFFF; border: 1px solid #EAEAEA; cursor: pointer;"></div>
+                    <div onclick="changeReadingBg('#E8F0E6', '#333')" style="width: 40px; height: 40px; border-radius: 50%; background: #E8F0E6; border: 1px solid #EAEAEA; cursor: pointer;"></div>
+                    <div onclick="changeReadingBg('#1A1A1A', '#999')" style="width: 40px; height: 40px; border-radius: 50%; background: #1A1A1A; border: 1px solid #333; cursor: pointer;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
 </div>
 
 <!-- 亮度调节弹窗 -->

@@ -14698,3 +14698,15 @@ body.edit-mode-active .widget-remove-btn { display: flex; }
 .wb-type-item:active { background: #F9F9F9; }
 .wb-type-item.active { color: #007AFF; font-weight: bold; }
 .wb-type-item.new-group { color: #111; font-weight: bold; justify-content: center; }
+
+/* ========================================== */
+/* Reading App Styles */
+/* ========================================== */
+.reading-view { transition: opacity 0.3s ease; }
+.reading-book-card { transition: transform 0.2s ease; }
+.reading-book-card:active { transform: scale(0.96); }
+.reader-top-bar { box-shadow: 0 2px 10px rgba(0,0,0,0.02); }
+.reader-bottom-menu { border-top-left-radius: 20px; border-top-right-radius: 20px; }
+#reader-progress-slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 12px; height: 12px; border-radius: 50%; background: #111; cursor: pointer; }
+#reader-progress-slider::-moz-range-thumb { width: 12px; height: 12px; border-radius: 50%; background: #111; cursor: pointer; border: none; }
+

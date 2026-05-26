@@ -4403,6 +4403,10 @@ async function wcLoadData() {
         const unread = await safeGet('kv_store', 'unread_counts');
         if (unread) wcState.unreadCounts = unread;
 
+        const readingBooks = await safeGet('kv_store', 'reading_books');
+        if (readingBooks) wcState.readingBooks = readingBooks;
+        else wcState.readingBooks = [];
+
         const charsUpdatedAt = await safeGet('kv_store', 'characters_updated_at');
         const chars = await safeGetAll('characters');
         const shouldUseBackupCharacters = persistentCharactersSnapshot.characters.length > 0 && (
@@ -4475,6 +4479,7 @@ async function wcSaveData() {
             store.put(wcState.phonePresets || [], 'phone_presets');
             store.put(wcState.shopData || {}, 'shop_data');
             store.put(wcState.relationships || [], 'relationships');
+            store.put(wcState.readingBooks || [], 'reading_books');
             store.put(charactersUpdatedAt, 'characters_updated_at');
         }).catch(e => console.warn("kv_store 保存异常", e));
 
@@ -6786,7 +6791,6 @@ ${timeGapPrompt ? timeGapPrompt + '\n' : ''}`;
 
         systemPrompt += `<format_rules>\n`;
         systemPrompt += `【最高优先级绝对强制】：你的回复 **必须且只能** 是一个合法的、可被 JSON.parse() 完美解析的 JSON 对象！\n`;
-        systemPrompt += `(注意：如果你需要调用 search_real_world 工具查询信息，请直接调用工具，此时不需要返回 JSON。等工具返回结果后，你再输出 JSON 回复。)\n`;
         
         if (shouldTriggerBgUpdate) {
             systemPrompt += `该对象必须包含 "replies" 数组（用于回复User），并包含 "phoneUpdate" 对象（用于暗中修改你的手机数据）。\n`;
@@ -7084,42 +7088,21 @@ ${timeGapPrompt ? timeGapPrompt + '\n' : ''}`;
         let currentTemp = parseFloat(apiConfig.temp);
         if (isNaN(currentTemp)) currentTemp = 0.7; // 默认值
 
-        let requestBody = {
-            model: apiConfig.model,
-            messages: messages,
-            temperature: currentTemp,
-            max_tokens: 4000,
-            tools: [
-                {
-                    type: "function",
-                    function: {
-                        name: "search_real_world",
-                        description: "查询真实世界的信息，例如百科知识、人物、事件等。当你需要了解你不知道的真实世界信息时调用此工具。",
-                        parameters: {
-                            type: "object",
-                            properties: {
-                                query: {
-                                    type: "string",
-                                    description: "要查询的关键词"
-                                }
-                            },
-                            required: ["query"]
-                        }
-                    }
-                }
-            ]
-        };
-
-        let response = await fetch(`${apiConfig.baseUrl}/chat/completions`, {
+        const response = await fetch(`${apiConfig.baseUrl}/chat/completions`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${apiConfig.key}`
             },
-            body: JSON.stringify(requestBody)
+            body: JSON.stringify({
+                model: apiConfig.model,
+                messages: messages,
+                temperature: currentTemp, // <--- 修改这里，使用上面定义好的 currentTemp
+                max_tokens: 4000 
+            })
         });
 
-        let data = await response.json();
+        const data = await response.json();
         
         // 👇👇👇 核心修复：拦截并显示真实的 API 错误原因 👇👇👇
         if (!response.ok) {
@@ -7134,136 +7117,7 @@ ${timeGapPrompt ? timeGapPrompt + '\n' : ''}`;
         }
         // 👆👆👆 修复结束 👆👆👆
 
-        let replyMessage = data.choices[0].message;
-
-        // 处理 Tool Calls (MCP 功能)
-        if (replyMessage.tool_calls && replyMessage.tool_calls.length > 0) {
-            wcAddMessage(charId, 'system', 'system', `[系统提示: Ta 正在查询真实世界信息...]`, { style: 'transparent' });
-            messages.push(replyMessage);
-
-            for (const toolCall of replyMessage.tool_calls) {
-                if (toolCall.function.name === 'search_real_world') {
-                    let searchResult = "未找到相关信息";
-                    try {
-                        const args = JSON.parse(toolCall.function.arguments);
-                        const query = args.query;
-                        
-                        // 1. 尝试百度百科 API (使用 JSONP 绕过 CORS，并增加超时处理)
-                        searchResult = await new Promise((resolve) => {
-                            const callbackName = 'baike_cb_' + Date.now() + '_' + Math.floor(Math.random() * 10000);
-                            const script = document.createElement('script');
-                            const timer = setTimeout(() => {
-                                cleanup();
-                                resolve(null);
-                            }, 5000);
-                            
-                            function cleanup() {
-                                clearTimeout(timer);
-                                delete window[callbackName];
-                                if (script.parentNode) script.parentNode.removeChild(script);
-                            }
-
-                            window[callbackName] = (data) => {
-                                cleanup();
-                                if (data && data.abstract) {
-                                    resolve(data.abstract);
-                                } else {
-                                    resolve(null);
-                                }
-                            };
-                            
-                            script.onerror = () => {
-                                cleanup();
-                                resolve(null);
-                            };
-                            
-                            script.src = `https://baike.baidu.com/api/openapi/BaikeLemmaCardApi?scope=103&format=json&appid=379020&bk_key=${encodeURIComponent(query)}&bk_length=600&callback=${callbackName}`;
-                            document.head.appendChild(script);
-                        });
-
-                        if (!searchResult) {
-                            // 2. 尝试思知知识图谱 (支持CORS，增加超时处理)
-                            try {
-                                const controller = new AbortController();
-                                const timeoutId = setTimeout(() => controller.abort(), 5000);
-                                const res = await fetch(`https://api.ownthink.com/kg/knowledge?entity=${encodeURIComponent(query)}`, { signal: controller.signal });
-                                clearTimeout(timeoutId);
-                                const searchData = await res.json();
-                                if (searchData.message === 'success' && searchData.data && searchData.data.desc) {
-                                    searchResult = searchData.data.desc;
-                                }
-                            } catch (e) {
-                                console.log("思知知识图谱查询失败", e);
-                            }
-                            
-                            if (!searchResult) {
-                                // 3. 尝试360搜索建议 (使用 JSONP 绕过 CORS，并增加超时处理)
-                                searchResult = await new Promise((resolve) => {
-                                    const callbackName = 'jsonp_cb_' + Date.now() + '_' + Math.floor(Math.random() * 10000);
-                                    const script = document.createElement('script');
-                                    const timer = setTimeout(() => {
-                                        cleanup();
-                                        resolve("未找到相关信息");
-                                    }, 5000);
-                                    
-                                    function cleanup() {
-                                        clearTimeout(timer);
-                                        delete window[callbackName];
-                                        if (script.parentNode) script.parentNode.removeChild(script);
-                                    }
-
-                                    window[callbackName] = (data) => {
-                                        cleanup();
-                                        if (data.result && data.result.length > 0) {
-                                            resolve("相关词条: " + data.result.map(item => item.word).join(', '));
-                                        } else {
-                                            resolve("未找到相关信息");
-                                        }
-                                    };
-                                    
-                                    script.onerror = () => {
-                                        cleanup();
-                                        resolve("未找到相关信息");
-                                    };
-                                    
-                                    script.src = `https://sug.so.360.cn/suggest?word=${encodeURIComponent(query)}&encodein=utf-8&encodeout=utf-8&format=json&callback=${callbackName}`;
-                                    document.head.appendChild(script);
-                                });
-                            }
-                        }
-                    } catch (e) {
-                        searchResult = "查询失败: " + e.message;
-                    }
-                    
-                    messages.push({
-                        role: "tool",
-                        tool_call_id: toolCall.id,
-                        name: toolCall.function.name,
-                        content: searchResult
-                    });
-                }
-            }
-
-            // 再次请求 API
-            requestBody.messages = messages;
-            response = await fetch(`${apiConfig.baseUrl}/chat/completions`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${apiConfig.key}`
-                },
-                body: JSON.stringify(requestBody)
-            });
-            data = await response.json();
-            
-            if (!response.ok) {
-                const errMsg = (data.error && data.error.message) ? data.error.message : `HTTP 状态码错误: ${response.status}`;
-                throw new Error(errMsg);
-            }
-            replyMessage = data.choices[0].message;
-        }
-
-        let replyText = replyMessage.content;
+        let replyText = data.choices[0].message.content;
 
         // 👇 核心修改：拉黑后，AI 的消息直接转入短信 APP 👇
         if (char.isBlocked) {
@@ -8411,39 +8265,18 @@ async function wcTriggerAIMoment(charId) {
   ]
 }\n`;
 
-        let requestBody = {
-            model: apiConfig.model,
-            messages: [{ role: "user", content: prompt }],
-            temperature: parseFloat(apiConfig.temp) || 0.8,
-            max_tokens: 4000,
-            tools: [
-                {
-                    type: "function",
-                    function: {
-                        name: "search_real_world",
-                        description: "查询真实世界的信息，例如百科知识、人物、事件等。当你需要了解你不知道的真实世界信息时调用此工具。",
-                        parameters: {
-                            type: "object",
-                            properties: {
-                                query: {
-                                    type: "string",
-                                    description: "要查询的关键词"
-                                }
-                            },
-                            required: ["query"]
-                        }
-                    }
-                }
-            ]
-        };
-
-        let response = await fetch(`${apiConfig.baseUrl}/chat/completions`, {
+        const response = await fetch(`${apiConfig.baseUrl}/chat/completions`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiConfig.key}` },
-            body: JSON.stringify(requestBody)
+            body: JSON.stringify({
+                model: apiConfig.model,
+                messages: [{ role: "user", content: prompt }],
+                temperature: parseFloat(apiConfig.temp) || 0.8,
+                max_tokens: 4000
+            })
         });
 
-        let data = await response.json();
+        const data = await response.json();
         
         // 👇 核心修复：拦截并显示真实的 API 错误原因 👇
         if (!response.ok) {
@@ -8454,102 +8287,7 @@ async function wcTriggerAIMoment(charId) {
         }
         // 👆 修复结束 👆
 
-        let replyMessage = data.choices[0].message;
-
-        // 处理 Tool Calls (MCP 功能)
-        if (replyMessage.tool_calls && replyMessage.tool_calls.length > 0) {
-            requestBody.messages.push(replyMessage);
-
-            for (const toolCall of replyMessage.tool_calls) {
-                if (toolCall.function.name === 'search_real_world') {
-                    let searchResult = "未找到相关信息";
-                    try {
-                        const args = JSON.parse(toolCall.function.arguments);
-                        const query = args.query;
-                        
-                        // 1. 尝试百度百科 API (使用 JSONP 绕过 CORS)
-                        searchResult = await new Promise((resolve, reject) => {
-                            const callbackName = 'baike_cb_' + Date.now() + '_' + Math.floor(Math.random() * 10000);
-                            window[callbackName] = (data) => {
-                                delete window[callbackName];
-                                document.head.removeChild(script);
-                                if (data && data.abstract) {
-                                    resolve(data.abstract);
-                                } else {
-                                    resolve(null); // 没找到，进入下一步
-                                }
-                            };
-                            const script = document.createElement('script');
-                            script.src = `https://baike.baidu.com/api/openapi/BaikeLemmaCardApi?scope=103&format=json&appid=379020&bk_key=${encodeURIComponent(query)}&bk_length=600&callback=${callbackName}`;
-                            script.onerror = () => {
-                                delete window[callbackName];
-                                document.head.removeChild(script);
-                                resolve(null);
-                            };
-                            document.head.appendChild(script);
-                        });
-
-                        if (!searchResult) {
-                            // 2. 尝试思知知识图谱 (支持CORS)
-                            const res = await fetch(`https://api.ownthink.com/kg/knowledge?entity=${encodeURIComponent(query)}`);
-                            const searchData = await res.json();
-                            if (searchData.message === 'success' && searchData.data && searchData.data.desc) {
-                                searchResult = searchData.data.desc;
-                            } else {
-                                // 3. 尝试360搜索建议 (使用JSONP绕过CORS)
-                                searchResult = await new Promise((resolve, reject) => {
-                                    const callbackName = 'jsonp_cb_' + Date.now() + '_' + Math.floor(Math.random() * 10000);
-                                    window[callbackName] = (data) => {
-                                        delete window[callbackName];
-                                        document.head.removeChild(script);
-                                        if (data.result && data.result.length > 0) {
-                                            resolve("相关词条: " + data.result.map(item => item.word).join(', '));
-                                        } else {
-                                            resolve("未找到相关信息");
-                                        }
-                                    };
-                                    const script = document.createElement('script');
-                                    script.src = `https://sug.so.360.cn/suggest?word=${encodeURIComponent(query)}&encodein=utf-8&encodeout=utf-8&format=json&callback=${callbackName}`;
-                                    script.onerror = () => {
-                                        delete window[callbackName];
-                                        document.head.removeChild(script);
-                                        resolve("未找到相关信息");
-                                    };
-                                    document.head.appendChild(script);
-                                });
-                            }
-                        }
-                    } catch (e) {
-                        searchResult = "查询失败: " + e.message;
-                    }
-                    
-                    requestBody.messages.push({
-                        role: "tool",
-                        tool_call_id: toolCall.id,
-                        name: toolCall.function.name,
-                        content: searchResult
-                    });
-                }
-            }
-
-            // 再次请求 API
-            response = await fetch(`${apiConfig.baseUrl}/chat/completions`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${apiConfig.key}`
-                },
-                body: JSON.stringify(requestBody)
-            });
-            data = await response.json();
-            
-            if (!response.ok) {
-                throw new Error(data.error?.message || `HTTP 错误: ${response.status}`);
-            }
-            replyMessage = data.choices[0].message;
-        }
-
-        let content = replyMessage.content;
+        let content = data.choices[0].message.content;
         content = content.replace(/<thinking>[\s\S]*?<\/thinking>/g, '').trim();
         content = content.replace(/```json/g, '').replace(/```/g, '').trim();
         const momentData = JSON.parse(content);
@@ -8973,130 +8711,19 @@ async function wcAutoGenerateSummary(charId, start, end) {
             prompt += `${sender}: ${content}\n`;
         });
 
-        let requestBody = {
-            model: apiConfig.model,
-            messages: [{ role: "user", content: prompt }],
-            temperature: parseFloat(apiConfig.temp) || 0.5,
-            tools: [
-                {
-                    type: "function",
-                    function: {
-                        name: "search_real_world",
-                        description: "查询真实世界的信息，例如百科知识、人物、事件等。当你需要了解你不知道的真实世界信息时调用此工具。",
-                        parameters: {
-                            type: "object",
-                            properties: {
-                                query: {
-                                    type: "string",
-                                    description: "要查询的关键词"
-                                }
-                            },
-                            required: ["query"]
-                        }
-                    }
-                }
-            ]
-        };
-
-        let response = await fetch(`${apiConfig.baseUrl}/chat/completions`, {
+        const response = await fetch(`${apiConfig.baseUrl}/chat/completions`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiConfig.key}` },
-            body: JSON.stringify(requestBody)
+            body: JSON.stringify({
+                model: apiConfig.model,
+                messages: [{ role: "user", content: prompt }],
+                temperature: parseFloat(apiConfig.temp) || 0.5
+
+            })
         });
 
-        let data = await response.json();
-        let replyMessage = data.choices[0].message;
-
-        // 处理 Tool Calls (MCP 功能)
-        if (replyMessage.tool_calls && replyMessage.tool_calls.length > 0) {
-            requestBody.messages.push(replyMessage);
-
-            for (const toolCall of replyMessage.tool_calls) {
-                if (toolCall.function.name === 'search_real_world') {
-                    let searchResult = "未找到相关信息";
-                    try {
-                        const args = JSON.parse(toolCall.function.arguments);
-                        const query = args.query;
-                        
-                        // 1. 尝试百度百科 API (使用 JSONP 绕过 CORS)
-                        searchResult = await new Promise((resolve, reject) => {
-                            const callbackName = 'baike_cb_' + Date.now() + '_' + Math.floor(Math.random() * 10000);
-                            window[callbackName] = (data) => {
-                                delete window[callbackName];
-                                document.head.removeChild(script);
-                                if (data && data.abstract) {
-                                    resolve(data.abstract);
-                                } else {
-                                    resolve(null); // 没找到，进入下一步
-                                }
-                            };
-                            const script = document.createElement('script');
-                            script.src = `https://baike.baidu.com/api/openapi/BaikeLemmaCardApi?scope=103&format=json&appid=379020&bk_key=${encodeURIComponent(query)}&bk_length=600&callback=${callbackName}`;
-                            script.onerror = () => {
-                                delete window[callbackName];
-                                document.head.removeChild(script);
-                                resolve(null);
-                            };
-                            document.head.appendChild(script);
-                        });
-
-                        if (!searchResult) {
-                            // 2. 尝试思知知识图谱 (支持CORS)
-                            const res = await fetch(`https://api.ownthink.com/kg/knowledge?entity=${encodeURIComponent(query)}`);
-                            const searchData = await res.json();
-                            if (searchData.message === 'success' && searchData.data && searchData.data.desc) {
-                                searchResult = searchData.data.desc;
-                            } else {
-                                // 3. 尝试360搜索建议 (使用JSONP绕过CORS)
-                                searchResult = await new Promise((resolve, reject) => {
-                                    const callbackName = 'jsonp_cb_' + Date.now() + '_' + Math.floor(Math.random() * 10000);
-                                    window[callbackName] = (data) => {
-                                        delete window[callbackName];
-                                        document.head.removeChild(script);
-                                        if (data.result && data.result.length > 0) {
-                                            resolve("相关词条: " + data.result.map(item => item.word).join(', '));
-                                        } else {
-                                            resolve("未找到相关信息");
-                                        }
-                                    };
-                                    const script = document.createElement('script');
-                                    script.src = `https://sug.so.360.cn/suggest?word=${encodeURIComponent(query)}&encodein=utf-8&encodeout=utf-8&format=json&callback=${callbackName}`;
-                                    script.onerror = () => {
-                                        delete window[callbackName];
-                                        document.head.removeChild(script);
-                                        resolve("未找到相关信息");
-                                    };
-                                    document.head.appendChild(script);
-                                });
-                            }
-                        }
-                    } catch (e) {
-                        searchResult = "查询失败: " + e.message;
-                    }
-                    
-                    requestBody.messages.push({
-                        role: "tool",
-                        tool_call_id: toolCall.id,
-                        name: toolCall.function.name,
-                        content: searchResult
-                    });
-                }
-            }
-
-            // 再次请求 API
-            response = await fetch(`${apiConfig.baseUrl}/chat/completions`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${apiConfig.key}`
-                },
-                body: JSON.stringify(requestBody)
-            });
-            data = await response.json();
-            replyMessage = data.choices[0].message;
-        }
-
-        let summary = replyMessage.content;
+        const data = await response.json();
+        let summary = data.choices[0].message.content;
         summary = summary.replace(/<thinking>[\s\S]*?<\/thinking>/g, '').trim();
 
         if (!char.memories) char.memories = [];
@@ -9447,6 +9074,350 @@ function wcActionMemory() {
     wcCloseAllPanels();
     wcOpenMemoryPage();
 }
+
+// ==========================================
+// 阅读 App 逻辑
+// ==========================================
+
+function openReadingApp() {
+    document.getElementById('readingAppModal').classList.add('active');
+    readingRenderBookshelf();
+}
+
+function closeReadingApp() {
+    document.getElementById('readingAppModal').classList.remove('active');
+}
+
+function readingRenderBookshelf() {
+    const grid = document.getElementById('reading-bookshelf-grid');
+    if (!grid) return;
+    grid.innerHTML = '';
+
+    if (!wcState.readingBooks || wcState.readingBooks.length === 0) {
+        grid.innerHTML = '<div style="grid-column: 1 / -1; text-align: center; color: #888; padding-top: 50px; font-size: 14px;">书架空空如也...</div>';
+        return;
+    }
+
+    wcState.readingBooks.forEach(book => {
+        const progress = book.progress || 0;
+        const card = document.createElement('div');
+        card.className = 'reading-book-card';
+        card.style.cssText = 'display: flex; flex-direction: column; gap: 8px; cursor: pointer;';
+        card.onclick = () => readingOpenBook(book.id);
+        
+        // 长按添加笔记
+        let pressTimer;
+        card.onmousedown = card.ontouchstart = (e) => {
+            pressTimer = setTimeout(() => {
+                readingOpenAddNoteModal(book.id);
+            }, 800);
+        };
+        card.onmouseup = card.onmouseleave = card.ontouchend = () => {
+            clearTimeout(pressTimer);
+        };
+
+        card.innerHTML = `
+            <div style="width: 100%; aspect-ratio: 3/4; background: #EAEAEA; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.05); position: relative;">
+                ${book.cover ? `<img src="${book.cover}" style="width: 100%; height: 100%; object-fit: cover;">` : `<div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: #999; font-size: 12px;">暂无封面</div>`}
+            </div>
+            <div style="font-size: 14px; font-weight: 600; color: #111; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${book.title}</div>
+            <div style="font-size: 11px; color: #888;">已读 ${progress.toFixed(2)}%</div>
+        `;
+        grid.appendChild(card);
+    });
+}
+
+let readingCurrentBookId = null;
+let readingCurrentChapterIndex = 0;
+let readingStartTime = 0;
+let readingTimer = null;
+
+function readingOpenBook(bookId) {
+    const book = wcState.readingBooks.find(b => b.id === bookId);
+    if (!book) return;
+
+    readingCurrentBookId = bookId;
+    readingCurrentChapterIndex = book.currentChapter || 0;
+    
+    document.getElementById('reading-view-bookshelf').style.display = 'none';
+    document.getElementById('reading-view-reader').style.display = 'flex';
+    
+    document.getElementById('reader-book-title-display').innerText = book.title;
+    
+    const char = wcState.characters.find(c => c.id === wcState.activeChatId);
+    if (char) {
+        document.getElementById('reader-char-avatar').src = char.avatar;
+    }
+
+    readingRenderChapter();
+    
+    // 开始计时
+    readingStartTime = Date.now();
+    if (readingTimer) clearInterval(readingTimer);
+    readingTimer = setInterval(readingUpdateStats, 60000); // 每分钟更新一次
+    readingUpdateStats();
+}
+
+function readingExitReader() {
+    if (readingTimer) clearInterval(readingTimer);
+    
+    // 保存进度
+    const book = wcState.readingBooks.find(b => b.id === readingCurrentBookId);
+    if (book) {
+        book.currentChapter = readingCurrentChapterIndex;
+        const contentArea = document.getElementById('reader-content-area');
+        if (contentArea.scrollHeight > 0) {
+            const scrollProgress = contentArea.scrollTop / (contentArea.scrollHeight - contentArea.clientHeight);
+            book.progress = (readingCurrentChapterIndex + scrollProgress) / book.chapters.length * 100;
+        }
+        wcSaveData();
+    }
+
+    document.getElementById('reading-view-reader').style.display = 'none';
+    document.getElementById('reading-view-bookshelf').style.display = 'flex';
+    readingRenderBookshelf();
+}
+
+function readingRenderChapter() {
+    const book = wcState.readingBooks.find(b => b.id === readingCurrentBookId);
+    if (!book || !book.chapters || book.chapters.length === 0) return;
+
+    const chapter = book.chapters[readingCurrentChapterIndex];
+    const contentArea = document.getElementById('reader-content-area');
+    
+    contentArea.innerHTML = `
+        <h2 style="font-size: 22px; font-weight: 700; margin-bottom: 30px; color: #111;">${chapter.title}</h2>
+        <div style="white-space: pre-wrap;">${chapter.content}</div>
+    `;
+    
+    contentArea.scrollTop = 0;
+    
+    // 更新进度条
+    const slider = document.getElementById('reader-progress-slider');
+    if (slider) {
+        slider.value = (readingCurrentChapterIndex / Math.max(1, book.chapters.length - 1)) * 100;
+    }
+}
+
+function readingToggleMenu() {
+    const topBar = document.getElementById('reader-top-bar');
+    const bottomMenu = document.getElementById('reader-bottom-menu');
+    
+    if (topBar.style.transform === 'translateY(0%)') {
+        topBar.style.transform = 'translateY(-100%)';
+        bottomMenu.style.transform = 'translateY(100%)';
+    } else {
+        topBar.style.transform = 'translateY(0%)';
+        bottomMenu.style.transform = 'translateY(0%)';
+        readingUpdateStats();
+    }
+}
+
+function readingUpdateStats() {
+    const book = wcState.readingBooks.find(b => b.id === readingCurrentBookId);
+    if (!book) return;
+
+    // 时长
+    const minutes = Math.floor((Date.now() - readingStartTime) / 60000) + (book.readTime || 0);
+    document.getElementById('reader-stat-time').innerText = minutes;
+
+    // 进度
+    const contentArea = document.getElementById('reader-content-area');
+    let scrollProgress = 0;
+    if (contentArea.scrollHeight > contentArea.clientHeight) {
+        scrollProgress = contentArea.scrollTop / (contentArea.scrollHeight - contentArea.clientHeight);
+    }
+    const totalProgress = ((readingCurrentChapterIndex + scrollProgress) / Math.max(1, book.chapters.length)) * 100;
+    document.getElementById('reader-stat-progress').innerText = totalProgress.toFixed(2) + '%';
+
+    // 速度 (估算)
+    const words = book.chapters[readingCurrentChapterIndex]?.content.length || 0;
+    const speed = minutes > 0 ? Math.floor(words / Math.max(1, minutes)) : 0;
+    document.getElementById('reader-stat-speed').innerText = speed;
+
+    // 笔记数
+    const notesCount = book.notes ? book.notes.length : 0;
+    document.getElementById('reader-stat-notes').innerText = notesCount;
+}
+
+function readingPrevChapter() {
+    if (readingCurrentChapterIndex > 0) {
+        readingCurrentChapterIndex--;
+        readingRenderChapter();
+    }
+}
+
+function readingNextChapter() {
+    const book = wcState.readingBooks.find(b => b.id === readingCurrentBookId);
+    if (book && readingCurrentChapterIndex < book.chapters.length - 1) {
+        readingCurrentChapterIndex++;
+        readingRenderChapter();
+    }
+}
+
+function readingSeekProgress(val) {
+    const book = wcState.readingBooks.find(b => b.id === readingCurrentBookId);
+    if (!book) return;
+    
+    const targetIndex = Math.floor((val / 100) * (book.chapters.length - 1));
+    if (targetIndex !== readingCurrentChapterIndex) {
+        readingCurrentChapterIndex = targetIndex;
+        readingRenderChapter();
+    }
+}
+
+function readingOpenToc() {
+    const book = wcState.readingBooks.find(b => b.id === readingCurrentBookId);
+    if (!book) return;
+
+    const list = document.getElementById('reading-toc-list');
+    list.innerHTML = '';
+
+    book.chapters.forEach((ch, idx) => {
+        const item = document.createElement('div');
+        item.style.cssText = `padding: 15px 20px; border-bottom: 1px solid #F0F0F0; font-size: 15px; color: ${idx === readingCurrentChapterIndex ? '#111' : '#666'}; font-weight: ${idx === readingCurrentChapterIndex ? '600' : '400'}; cursor: pointer;`;
+        item.innerText = ch.title;
+        item.onclick = () => {
+            readingCurrentChapterIndex = idx;
+            readingRenderChapter();
+            wcCloseModal('reading-modal-toc');
+            readingToggleMenu();
+        };
+        list.appendChild(item);
+    });
+
+    wcOpenModal('reading-modal-toc');
+}
+
+function readingOpenNotes() {
+    const book = wcState.readingBooks.find(b => b.id === readingCurrentBookId);
+    if (!book) return;
+
+    const list = document.getElementById('reading-notes-list');
+    list.innerHTML = '';
+
+    if (!book.notes || book.notes.length === 0) {
+        list.innerHTML = '<div style="text-align: center; color: #888; padding-top: 30px; font-size: 14px;">暂无笔记</div>';
+    } else {
+        book.notes.forEach(note => {
+            const item = document.createElement('div');
+            item.style.cssText = 'background: #FFF; border-radius: 12px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.02); cursor: pointer;';
+            item.onclick = () => {
+                readingCurrentChapterIndex = note.chapterIndex || 0;
+                readingRenderChapter();
+                wcCloseModal('reading-modal-notes');
+                const topBar = document.getElementById('reader-top-bar');
+                if (topBar.style.transform === 'translateY(0%)') {
+                    readingToggleMenu();
+                }
+            };
+            item.innerHTML = `
+                <div style="font-size: 12px; color: #888; margin-bottom: 8px;">${note.chapterTitle}</div>
+                <div style="font-size: 14px; color: #333; line-height: 1.5;">${note.content}</div>
+                <div style="font-size: 11px; color: #AAA; margin-top: 8px; text-align: right;">${new Date(note.time).toLocaleString()}</div>
+            `;
+            list.appendChild(item);
+        });
+    }
+
+    wcOpenModal('reading-modal-notes');
+}
+
+function readingOpenAddNoteModal(bookId) {
+    const book = wcState.readingBooks.find(b => b.id === bookId);
+    if (!book) return;
+    
+    readingCurrentBookId = bookId;
+    const chapterTitle = book.chapters[book.currentChapter || 0]?.title || '未知章节';
+    document.getElementById('reading-note-context').innerText = `当前位置：${chapterTitle}`;
+    document.getElementById('reading-note-input').value = '';
+    
+    wcOpenModal('reading-modal-add-note');
+}
+
+function readingSaveNote() {
+    const content = document.getElementById('reading-note-input').value.trim();
+    if (!content) return alert('笔记内容不能为空');
+
+    const book = wcState.readingBooks.find(b => b.id === readingCurrentBookId);
+    if (!book) return;
+
+    if (!book.notes) book.notes = [];
+    
+    const chapterTitle = book.chapters[readingCurrentChapterIndex || book.currentChapter || 0]?.title || '未知章节';
+    
+    book.notes.push({
+        id: Date.now(),
+        chapterIndex: readingCurrentChapterIndex || book.currentChapter || 0,
+        chapterTitle: chapterTitle,
+        content: content,
+        time: Date.now()
+    });
+
+    wcSaveData();
+    wcCloseModal('reading-modal-add-note');
+    alert('笔记已保存');
+}
+
+let readingIsNightMode = false;
+function readingToggleNightMode() {
+    readingIsNightMode = !readingIsNightMode;
+    const readerView = document.getElementById('reading-view-reader');
+    const contentArea = document.getElementById('reader-content-area');
+    const topBar = document.getElementById('reader-top-bar');
+    const bottomMenu = document.getElementById('reader-bottom-menu');
+    const nightIcon = document.getElementById('reader-icon-night');
+    const nightText = document.getElementById('reader-text-night');
+
+    if (readingIsNightMode) {
+        readerView.style.background = '#1A1A1A';
+        contentArea.style.color = '#A0A0A0';
+        topBar.style.background = 'rgba(26, 26, 26, 0.95)';
+        bottomMenu.style.background = 'rgba(26, 26, 26, 0.95)';
+        topBar.style.color = '#A0A0A0';
+        bottomMenu.style.color = '#A0A0A0';
+        document.getElementById('reader-book-title-display').style.color = '#A0A0A0';
+        
+        // Update stats text color
+        ['reader-stat-time', 'reader-stat-progress', 'reader-stat-speed', 'reader-stat-notes'].forEach(id => {
+            document.getElementById(id).style.color = '#A0A0A0';
+        });
+        
+        // Update SVG strokes
+        const svgs = bottomMenu.querySelectorAll('svg');
+        svgs.forEach(svg => svg.style.stroke = '#A0A0A0');
+        topBar.querySelector('svg').style.stroke = '#A0A0A0';
+
+        nightIcon.innerHTML = '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"></path>';
+        nightText.innerText = '日间';
+    } else {
+        readerView.style.background = '#F4F1EA';
+        contentArea.style.color = '#333';
+        topBar.style.background = 'rgba(244, 241, 234, 0.95)';
+        bottomMenu.style.background = 'rgba(244, 241, 234, 0.95)';
+        topBar.style.color = '#111';
+        bottomMenu.style.color = '#111';
+        document.getElementById('reader-book-title-display').style.color = '#111';
+        
+        // Update stats text color
+        ['reader-stat-time', 'reader-stat-progress', 'reader-stat-speed', 'reader-stat-notes'].forEach(id => {
+            document.getElementById(id).style.color = '#111';
+        });
+        
+        // Update SVG strokes
+        const svgs = bottomMenu.querySelectorAll('svg');
+        svgs.forEach(svg => svg.style.stroke = '#111');
+        topBar.querySelector('svg').style.stroke = '#111';
+
+        nightIcon.innerHTML = '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>';
+        nightText.innerText = '夜间';
+    }
+}
+
+function readingOpenSettings() {
+    alert('设置功能开发中...');
+}
+
 
 // ==========================================
 // 极简韩系 INS 风回忆日记逻辑 (黑白星空塔罗牌版)
@@ -12868,39 +12839,18 @@ async function wcGeneratePhoneSettings(renderOnly = false) {
   ]
 }`;
 
-        let requestBody = {
-            model: apiConfig.model,
-            messages: [{ role: "user", content: prompt }],
-            temperature: 0.7,
-            max_tokens: 4000,
-            tools: [
-                {
-                    type: "function",
-                    function: {
-                        name: "search_real_world",
-                        description: "查询真实世界的信息，例如百科知识、人物、事件等。当你需要了解你不知道的真实世界信息时调用此工具。",
-                        parameters: {
-                            type: "object",
-                            properties: {
-                                query: {
-                                    type: "string",
-                                    description: "要查询的关键词"
-                                }
-                            },
-                            required: ["query"]
-                        }
-                    }
-                }
-            ]
-        };
-
-        let response = await fetch(`${apiConfig.baseUrl}/chat/completions`, {
+        const response = await fetch(`${apiConfig.baseUrl}/chat/completions`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiConfig.key}` },
-            body: JSON.stringify(requestBody)
+            body: JSON.stringify({
+                model: apiConfig.model,
+                messages: [{ role: "user", content: prompt }],
+                temperature: 0.7,
+                max_tokens: 4000
+            })
         });
 
-        let data = await response.json();
+        const data = await response.json();
         if (!response.ok) {
             throw new Error(data.error?.message || `HTTP 错误: ${response.status}`);
         }
@@ -12908,102 +12858,7 @@ async function wcGeneratePhoneSettings(renderOnly = false) {
             throw new Error("API 返回数据异常，请检查模型名称是否正确。");
         }
 
-        let replyMessage = data.choices[0].message;
-
-        // 处理 Tool Calls (MCP 功能)
-        if (replyMessage.tool_calls && replyMessage.tool_calls.length > 0) {
-            requestBody.messages.push(replyMessage);
-
-            for (const toolCall of replyMessage.tool_calls) {
-                if (toolCall.function.name === 'search_real_world') {
-                    let searchResult = "未找到相关信息";
-                    try {
-                        const args = JSON.parse(toolCall.function.arguments);
-                        const query = args.query;
-                        
-                        // 1. 尝试百度百科 API (使用 JSONP 绕过 CORS)
-                        searchResult = await new Promise((resolve, reject) => {
-                            const callbackName = 'baike_cb_' + Date.now() + '_' + Math.floor(Math.random() * 10000);
-                            window[callbackName] = (data) => {
-                                delete window[callbackName];
-                                document.head.removeChild(script);
-                                if (data && data.abstract) {
-                                    resolve(data.abstract);
-                                } else {
-                                    resolve(null); // 没找到，进入下一步
-                                }
-                            };
-                            const script = document.createElement('script');
-                            script.src = `https://baike.baidu.com/api/openapi/BaikeLemmaCardApi?scope=103&format=json&appid=379020&bk_key=${encodeURIComponent(query)}&bk_length=600&callback=${callbackName}`;
-                            script.onerror = () => {
-                                delete window[callbackName];
-                                document.head.removeChild(script);
-                                resolve(null);
-                            };
-                            document.head.appendChild(script);
-                        });
-
-                        if (!searchResult) {
-                            // 2. 尝试思知知识图谱 (支持CORS)
-                            const res = await fetch(`https://api.ownthink.com/kg/knowledge?entity=${encodeURIComponent(query)}`);
-                            const searchData = await res.json();
-                            if (searchData.message === 'success' && searchData.data && searchData.data.desc) {
-                                searchResult = searchData.data.desc;
-                            } else {
-                                // 3. 尝试360搜索建议 (使用JSONP绕过CORS)
-                                searchResult = await new Promise((resolve, reject) => {
-                                    const callbackName = 'jsonp_cb_' + Date.now() + '_' + Math.floor(Math.random() * 10000);
-                                    window[callbackName] = (data) => {
-                                        delete window[callbackName];
-                                        document.head.removeChild(script);
-                                        if (data.result && data.result.length > 0) {
-                                            resolve("相关词条: " + data.result.map(item => item.word).join(', '));
-                                        } else {
-                                            resolve("未找到相关信息");
-                                        }
-                                    };
-                                    const script = document.createElement('script');
-                                    script.src = `https://sug.so.360.cn/suggest?word=${encodeURIComponent(query)}&encodein=utf-8&encodeout=utf-8&format=json&callback=${callbackName}`;
-                                    script.onerror = () => {
-                                        delete window[callbackName];
-                                        document.head.removeChild(script);
-                                        resolve("未找到相关信息");
-                                    };
-                                    document.head.appendChild(script);
-                                });
-                            }
-                        }
-                    } catch (e) {
-                        searchResult = "查询失败: " + e.message;
-                    }
-                    
-                    requestBody.messages.push({
-                        role: "tool",
-                        tool_call_id: toolCall.id,
-                        name: toolCall.function.name,
-                        content: searchResult
-                    });
-                }
-            }
-
-            // 再次请求 API
-            response = await fetch(`${apiConfig.baseUrl}/chat/completions`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${apiConfig.key}`
-                },
-                body: JSON.stringify(requestBody)
-            });
-            data = await response.json();
-            
-            if (!response.ok) {
-                throw new Error(data.error?.message || `HTTP 错误: ${response.status}`);
-            }
-            replyMessage = data.choices[0].message;
-        }
-
-        let contentStr = replyMessage.content;
+        let contentStr = data.choices[0].message.content;
         contentStr = contentStr.replace(/<thinking>[\s\S]*?<\/thinking>/g, '').trim();
         contentStr = contentStr.replace(/```json/g, '').replace(/```/g, '').trim();
         
@@ -13891,131 +13746,19 @@ async function wcSimTriggerAI() {
             prompt += `${chat.name}:`;
         }
 
-        let requestBody = {
-            model: apiConfig.model,
-            messages: [{ role: "user", content: prompt }],
-            temperature: parseFloat(apiConfig.temp) || 0.8,
-            max_tokens: 4000,
-            tools: [
-                {
-                    type: "function",
-                    function: {
-                        name: "search_real_world",
-                        description: "查询真实世界的信息，例如百科知识、人物、事件等。当你需要了解你不知道的真实世界信息时调用此工具。",
-                        parameters: {
-                            type: "object",
-                            properties: {
-                                query: {
-                                    type: "string",
-                                    description: "要查询的关键词"
-                                }
-                            },
-                            required: ["query"]
-                        }
-                    }
-                }
-            ]
-        };
-
-        let response = await fetch(`${apiConfig.baseUrl}/chat/completions`, {
+        const response = await fetch(`${apiConfig.baseUrl}/chat/completions`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiConfig.key}` },
-            body: JSON.stringify(requestBody)
+            body: JSON.stringify({
+                model: apiConfig.model,
+                messages: [{ role: "user", content: prompt }],
+                temperature: parseFloat(apiConfig.temp) || 0.8,
+                max_tokens: 4000
+            })
         });
 
-        let data = await response.json();
-        let replyMessage = data.choices[0].message;
-
-        // 处理 Tool Calls (MCP 功能)
-        if (replyMessage.tool_calls && replyMessage.tool_calls.length > 0) {
-            requestBody.messages.push(replyMessage);
-
-            for (const toolCall of replyMessage.tool_calls) {
-                if (toolCall.function.name === 'search_real_world') {
-                    let searchResult = "未找到相关信息";
-                    try {
-                        const args = JSON.parse(toolCall.function.arguments);
-                        const query = args.query;
-                        
-                        // 1. 尝试百度百科 API (使用 JSONP 绕过 CORS)
-                        searchResult = await new Promise((resolve, reject) => {
-                            const callbackName = 'baike_cb_' + Date.now() + '_' + Math.floor(Math.random() * 10000);
-                            window[callbackName] = (data) => {
-                                delete window[callbackName];
-                                document.head.removeChild(script);
-                                if (data && data.abstract) {
-                                    resolve(data.abstract);
-                                } else {
-                                    resolve(null); // 没找到，进入下一步
-                                }
-                            };
-                            const script = document.createElement('script');
-                            script.src = `https://baike.baidu.com/api/openapi/BaikeLemmaCardApi?scope=103&format=json&appid=379020&bk_key=${encodeURIComponent(query)}&bk_length=600&callback=${callbackName}`;
-                            script.onerror = () => {
-                                delete window[callbackName];
-                                document.head.removeChild(script);
-                                resolve(null);
-                            };
-                            document.head.appendChild(script);
-                        });
-
-                        if (!searchResult) {
-                            // 2. 尝试思知知识图谱 (支持CORS)
-                            const res = await fetch(`https://api.ownthink.com/kg/knowledge?entity=${encodeURIComponent(query)}`);
-                            const searchData = await res.json();
-                            if (searchData.message === 'success' && searchData.data && searchData.data.desc) {
-                                searchResult = searchData.data.desc;
-                            } else {
-                                // 3. 尝试360搜索建议 (使用JSONP绕过CORS)
-                                searchResult = await new Promise((resolve, reject) => {
-                                    const callbackName = 'jsonp_cb_' + Date.now() + '_' + Math.floor(Math.random() * 10000);
-                                    window[callbackName] = (data) => {
-                                        delete window[callbackName];
-                                        document.head.removeChild(script);
-                                        if (data.result && data.result.length > 0) {
-                                            resolve("相关词条: " + data.result.map(item => item.word).join(', '));
-                                        } else {
-                                            resolve("未找到相关信息");
-                                        }
-                                    };
-                                    const script = document.createElement('script');
-                                    script.src = `https://sug.so.360.cn/suggest?word=${encodeURIComponent(query)}&encodein=utf-8&encodeout=utf-8&format=json&callback=${callbackName}`;
-                                    script.onerror = () => {
-                                        delete window[callbackName];
-                                        document.head.removeChild(script);
-                                        resolve("未找到相关信息");
-                                    };
-                                    document.head.appendChild(script);
-                                });
-                            }
-                        }
-                    } catch (e) {
-                        searchResult = "查询失败: " + e.message;
-                    }
-                    
-                    requestBody.messages.push({
-                        role: "tool",
-                        tool_call_id: toolCall.id,
-                        name: toolCall.function.name,
-                        content: searchResult
-                    });
-                }
-            }
-
-            // 再次请求 API
-            response = await fetch(`${apiConfig.baseUrl}/chat/completions`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${apiConfig.key}`
-                },
-                body: JSON.stringify(requestBody)
-            });
-            data = await response.json();
-            replyMessage = data.choices[0].message;
-        }
-
-        let content = replyMessage.content.trim();
+        const data = await response.json();
+        let content = data.choices[0].message.content.trim();
         
         // 解析 JSON
         let replies = [];
@@ -19706,39 +19449,18 @@ async function wcGeneratePhoneCart() {
   ]
 }\n`;
 
-        let requestBody = {
-            model: apiConfig.model,
-            messages: [{ role: "user", content: prompt }],
-            temperature: parseFloat(apiConfig.temp) || 0.8,
-            max_tokens: 4000,
-            tools: [
-                {
-                    type: "function",
-                    function: {
-                        name: "search_real_world",
-                        description: "查询真实世界的信息，例如百科知识、人物、事件等。当你需要了解你不知道的真实世界信息时调用此工具。",
-                        parameters: {
-                            type: "object",
-                            properties: {
-                                query: {
-                                    type: "string",
-                                    description: "要查询的关键词"
-                                }
-                            },
-                            required: ["query"]
-                        }
-                    }
-                }
-            ]
-        };
-
-        let response = await fetch(`${apiConfig.baseUrl}/chat/completions`, {
+        const response = await fetch(`${apiConfig.baseUrl}/chat/completions`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiConfig.key}` },
-            body: JSON.stringify(requestBody)
+            body: JSON.stringify({
+                model: apiConfig.model,
+                messages: [{ role: "user", content: prompt }],
+                temperature: parseFloat(apiConfig.temp) || 0.8,
+                max_tokens: 4000
+            })
         });
 
-        let data = await response.json();
+        const data = await response.json();
         if (!response.ok) {
             throw new Error(data.error?.message || `HTTP 错误: ${response.status}`);
         }
@@ -19746,102 +19468,7 @@ async function wcGeneratePhoneCart() {
             throw new Error("API 返回数据异常，请检查模型名称是否正确。");
         }
 
-        let replyMessage = data.choices[0].message;
-
-        // 处理 Tool Calls (MCP 功能)
-        if (replyMessage.tool_calls && replyMessage.tool_calls.length > 0) {
-            requestBody.messages.push(replyMessage);
-
-            for (const toolCall of replyMessage.tool_calls) {
-                if (toolCall.function.name === 'search_real_world') {
-                    let searchResult = "未找到相关信息";
-                    try {
-                        const args = JSON.parse(toolCall.function.arguments);
-                        const query = args.query;
-                        
-                        // 1. 尝试百度百科 API (使用 JSONP 绕过 CORS)
-                        searchResult = await new Promise((resolve, reject) => {
-                            const callbackName = 'baike_cb_' + Date.now() + '_' + Math.floor(Math.random() * 10000);
-                            window[callbackName] = (data) => {
-                                delete window[callbackName];
-                                document.head.removeChild(script);
-                                if (data && data.abstract) {
-                                    resolve(data.abstract);
-                                } else {
-                                    resolve(null); // 没找到，进入下一步
-                                }
-                            };
-                            const script = document.createElement('script');
-                            script.src = `https://baike.baidu.com/api/openapi/BaikeLemmaCardApi?scope=103&format=json&appid=379020&bk_key=${encodeURIComponent(query)}&bk_length=600&callback=${callbackName}`;
-                            script.onerror = () => {
-                                delete window[callbackName];
-                                document.head.removeChild(script);
-                                resolve(null);
-                            };
-                            document.head.appendChild(script);
-                        });
-
-                        if (!searchResult) {
-                            // 2. 尝试思知知识图谱 (支持CORS)
-                            const res = await fetch(`https://api.ownthink.com/kg/knowledge?entity=${encodeURIComponent(query)}`);
-                            const searchData = await res.json();
-                            if (searchData.message === 'success' && searchData.data && searchData.data.desc) {
-                                searchResult = searchData.data.desc;
-                            } else {
-                                // 3. 尝试360搜索建议 (使用JSONP绕过CORS)
-                                searchResult = await new Promise((resolve, reject) => {
-                                    const callbackName = 'jsonp_cb_' + Date.now() + '_' + Math.floor(Math.random() * 10000);
-                                    window[callbackName] = (data) => {
-                                        delete window[callbackName];
-                                        document.head.removeChild(script);
-                                        if (data.result && data.result.length > 0) {
-                                            resolve("相关词条: " + data.result.map(item => item.word).join(', '));
-                                        } else {
-                                            resolve("未找到相关信息");
-                                        }
-                                    };
-                                    const script = document.createElement('script');
-                                    script.src = `https://sug.so.360.cn/suggest?word=${encodeURIComponent(query)}&encodein=utf-8&encodeout=utf-8&format=json&callback=${callbackName}`;
-                                    script.onerror = () => {
-                                        delete window[callbackName];
-                                        document.head.removeChild(script);
-                                        resolve("未找到相关信息");
-                                    };
-                                    document.head.appendChild(script);
-                                });
-                            }
-                        }
-                    } catch (e) {
-                        searchResult = "查询失败: " + e.message;
-                    }
-                    
-                    requestBody.messages.push({
-                        role: "tool",
-                        tool_call_id: toolCall.id,
-                        name: toolCall.function.name,
-                        content: searchResult
-                    });
-                }
-            }
-
-            // 再次请求 API
-            response = await fetch(`${apiConfig.baseUrl}/chat/completions`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${apiConfig.key}`
-                },
-                body: JSON.stringify(requestBody)
-            });
-            data = await response.json();
-            
-            if (!response.ok) {
-                throw new Error(data.error?.message || `HTTP 错误: ${response.status}`);
-            }
-            replyMessage = data.choices[0].message;
-        }
-
-        let content = replyMessage.content;
+        let content = data.choices[0].message.content;
         content = content.replace(/<thinking>[\s\S]*?<\/thinking>/g, '').trim();
         content = content.replace(/```json/g, '').replace(/```/g, '').trim();
         
@@ -23571,131 +23198,19 @@ async function endDreamAndSummarize() {
             summaryPrefix = "[梦境残影]";
         }
 
-        let requestBody = {
-            model: apiConfig.model,
-            messages: [{ role: "user", content: prompt }],
-            temperature: 0.7,
-            max_tokens: 4000,
-            tools: [
-                {
-                    type: "function",
-                    function: {
-                        name: "search_real_world",
-                        description: "查询真实世界的信息，例如百科知识、人物、事件等。当你需要了解你不知道的真实世界信息时调用此工具。",
-                        parameters: {
-                            type: "object",
-                            properties: {
-                                query: {
-                                    type: "string",
-                                    description: "要查询的关键词"
-                                }
-                            },
-                            required: ["query"]
-                        }
-                    }
-                }
-            ]
-        };
-
-        let response = await fetch(`${apiConfig.baseUrl}/chat/completions`, {
+        const response = await fetch(`${apiConfig.baseUrl}/chat/completions`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiConfig.key}` },
-            body: JSON.stringify(requestBody)
+            body: JSON.stringify({
+                model: apiConfig.model,
+                messages: [{ role: "user", content: prompt }],
+                temperature: 0.7,
+                max_tokens: 4000
+            })
         });
 
-        let data = await response.json();
-        let replyMessage = data.choices[0].message;
-
-        // 处理 Tool Calls (MCP 功能)
-        if (replyMessage.tool_calls && replyMessage.tool_calls.length > 0) {
-            requestBody.messages.push(replyMessage);
-
-            for (const toolCall of replyMessage.tool_calls) {
-                if (toolCall.function.name === 'search_real_world') {
-                    let searchResult = "未找到相关信息";
-                    try {
-                        const args = JSON.parse(toolCall.function.arguments);
-                        const query = args.query;
-                        
-                        // 1. 尝试百度百科 API (使用 JSONP 绕过 CORS)
-                        searchResult = await new Promise((resolve, reject) => {
-                            const callbackName = 'baike_cb_' + Date.now() + '_' + Math.floor(Math.random() * 10000);
-                            window[callbackName] = (data) => {
-                                delete window[callbackName];
-                                document.head.removeChild(script);
-                                if (data && data.abstract) {
-                                    resolve(data.abstract);
-                                } else {
-                                    resolve(null); // 没找到，进入下一步
-                                }
-                            };
-                            const script = document.createElement('script');
-                            script.src = `https://baike.baidu.com/api/openapi/BaikeLemmaCardApi?scope=103&format=json&appid=379020&bk_key=${encodeURIComponent(query)}&bk_length=600&callback=${callbackName}`;
-                            script.onerror = () => {
-                                delete window[callbackName];
-                                document.head.removeChild(script);
-                                resolve(null);
-                            };
-                            document.head.appendChild(script);
-                        });
-
-                        if (!searchResult) {
-                            // 2. 尝试思知知识图谱 (支持CORS)
-                            const res = await fetch(`https://api.ownthink.com/kg/knowledge?entity=${encodeURIComponent(query)}`);
-                            const searchData = await res.json();
-                            if (searchData.message === 'success' && searchData.data && searchData.data.desc) {
-                                searchResult = searchData.data.desc;
-                            } else {
-                                // 3. 尝试360搜索建议 (使用JSONP绕过CORS)
-                                searchResult = await new Promise((resolve, reject) => {
-                                    const callbackName = 'jsonp_cb_' + Date.now() + '_' + Math.floor(Math.random() * 10000);
-                                    window[callbackName] = (data) => {
-                                        delete window[callbackName];
-                                        document.head.removeChild(script);
-                                        if (data.result && data.result.length > 0) {
-                                            resolve("相关词条: " + data.result.map(item => item.word).join(', '));
-                                        } else {
-                                            resolve("未找到相关信息");
-                                        }
-                                    };
-                                    const script = document.createElement('script');
-                                    script.src = `https://sug.so.360.cn/suggest?word=${encodeURIComponent(query)}&encodein=utf-8&encodeout=utf-8&format=json&callback=${callbackName}`;
-                                    script.onerror = () => {
-                                        delete window[callbackName];
-                                        document.head.removeChild(script);
-                                        resolve("未找到相关信息");
-                                    };
-                                    document.head.appendChild(script);
-                                });
-                            }
-                        }
-                    } catch (e) {
-                        searchResult = "查询失败: " + e.message;
-                    }
-                    
-                    requestBody.messages.push({
-                        role: "tool",
-                        tool_call_id: toolCall.id,
-                        name: toolCall.function.name,
-                        content: searchResult
-                    });
-                }
-            }
-
-            // 再次请求 API
-            response = await fetch(`${apiConfig.baseUrl}/chat/completions`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${apiConfig.key}`
-                },
-                body: JSON.stringify(requestBody)
-            });
-            data = await response.json();
-            replyMessage = data.choices[0].message;
-        }
-
-        let summary = replyMessage.content;
+        const data = await response.json();
+        let summary = data.choices[0].message.content;
         summary = summary.replace(/<thinking>[\s\S]*?<\/thinking>/g, '').trim();
 
         // 1. 保存到卡片列表 (梦境和线下都保存，方便回看聊天记录)
