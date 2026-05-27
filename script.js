@@ -1968,7 +1968,9 @@ function initGrid() {
         // 👇 新增：App 7 (Wish & To-Do) 放在网格的第 5 个位置
         { id: 'app-7', iconId: 'icon-7', nameId: 'name-7', name: 'Wish', svg: '<svg class="default-icon-svg" viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>' },
         // 👇 新增：App 8 (短信 iMessage) 放在第二页第二个格子
-        { id: 'app-8', iconId: 'icon-8', nameId: 'name-8', name: '短信', svg: '<svg class="default-icon-svg" viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM9 11H7V9h2v2zm4 0h-2V9h2v2zm4 0h-2V9h2v2z"/></svg>' }
+        { id: 'app-8', iconId: 'icon-8', nameId: 'name-8', name: '短信', svg: '<svg class="default-icon-svg" viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM9 11H7V9h2v2zm4 0h-2V9h2v2zm4 0h-2V9h2v2z"/></svg>' },
+        // 👇 新增：App 9 (阅读App) 放在第二页
+        { id: 'app-9', iconId: 'icon-9', nameId: 'name-9', name: '阅读', svg: '<svg class="default-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>' }
     ];
     const cells1 = Array.from(grid1.children).slice(1); // 第一页的格子 (避开小组件)
     const cells2 = Array.from(grid2.children); // 第二页的格子
@@ -1990,8 +1992,9 @@ function initGrid() {
             if (data.id === 'app-1') openLoversSpace();
             if (data.id === 'app-2') openMusicApp(); 
             if (data.id === 'app-3') openForumApp(); 
-            if (data.id === 'app-7') openWishApp(); 
+            if (data.id === 'app-7') openWishApp();
             if (data.id === 'app-8') { if(typeof openSmsApp === 'function') openSmsApp(); } // 👈 绑定打开短信APP
+            if (data.id === 'app-9') { if(typeof openReadingApp === 'function') openReadingApp(); } // 👈 绑定打开阅读APP
         });
 
         // 核心：前 7 个放第一页，Wish 和 短信 放第二页
@@ -1999,6 +2002,8 @@ function initGrid() {
             if (cells2[0]) cells2[0].appendChild(appDiv);
         } else if (data.id === 'app-8') {
             if (cells2[1]) cells2[1].appendChild(appDiv); // 👈 放在第二页第二个格子
+        } else if (data.id === 'app-9') {
+            if (cells2[2]) cells2[2].appendChild(appDiv); // 👈 放在第二页第三个格子
         } else {
             if (cells1[index]) cells1[index].appendChild(appDiv);
         }
@@ -4326,7 +4331,8 @@ const wcState = {
         isSpeaking: false,
         transcript: [] // 👈 新增：专门用于存储当前通话记录的数组
     },
-    showHiddenMessages: false // 👈 新增：是否显示隐藏的系统提示
+    showHiddenMessages: false, // 👈 新增：是否显示隐藏的系统提示
+    readingBooks: [] // 👈 新增：阅读App书架数据
 };
 
 document.addEventListener('visibilitychange', () => {
@@ -4404,8 +4410,32 @@ async function wcLoadData() {
         if (unread) wcState.unreadCounts = unread;
 
         const readingBooks = await safeGet('kv_store', 'reading_books');
-        if (readingBooks) wcState.readingBooks = readingBooks;
-        else wcState.readingBooks = [];
+        if (readingBooks && readingBooks.length > 0) {
+            wcState.readingBooks = readingBooks;
+        } else {
+            wcState.readingBooks = [
+                {
+                    id: 'book-1',
+                    title: '百年孤独',
+                    cover: 'https://images.unsplash.com/photo-1544947950-fa07a98d237f?q=80&w=800&auto=format&fit=crop',
+                    progress: 12.5,
+                    currentChapter: 0,
+                    chapters: [
+                        { title: '第一章', content: '多年以后，奥雷连诺上校站在行刑队面前，准会想起父亲带他去参观冰块的那个遥远的下午。\n\n当时，马孔多是个二十户人家的村落，泥巴和芦苇盖成的屋子沿河岸排开，湍急的河水清澈见底，河床里卵石洁白光滑宛如史前巨蛋。世界新生伊始，许多事物还没有名字，提到的时候尚需用手指指点点。' }
+                    ]
+                },
+                {
+                    id: 'book-2',
+                    title: '人类简史',
+                    cover: 'https://images.unsplash.com/photo-1589829085413-56de8ae18c73?q=80&w=800&auto=format&fit=crop',
+                    progress: 45.2,
+                    currentChapter: 0,
+                    chapters: [
+                        { title: '第一章 人类：一种也没什么特别的动物', content: '大约在135亿年前，经过所谓的“大爆炸”（Big Bang）之后，宇宙的物质、能量、时间和空间才成了现在的样子。宇宙的这些基本特征，就成了“物理学”。\n\n在这之后大约过了30万年，物质和能量开始形成复杂的结构，称为“原子”，再进一步结合成分子。至于这些原子和分子的故事以及它们如何互动，就成了“化学”。' }
+                    ]
+                }
+            ];
+        }
 
         const charsUpdatedAt = await safeGet('kv_store', 'characters_updated_at');
         const chars = await safeGetAll('characters');
@@ -9080,12 +9110,12 @@ function wcActionMemory() {
 // ==========================================
 
 function openReadingApp() {
-    document.getElementById('readingAppModal').classList.add('active');
+    document.getElementById('readingAppModal2').classList.add('active');
     readingRenderBookshelf();
 }
 
 function closeReadingApp() {
-    document.getElementById('readingAppModal').classList.remove('active');
+    document.getElementById('readingAppModal2').classList.remove('active');
 }
 
 function readingRenderBookshelf() {
@@ -9107,21 +9137,42 @@ function readingRenderBookshelf() {
         
         // 长按添加笔记
         let pressTimer;
-        card.onmousedown = card.ontouchstart = (e) => {
+        let isLongPress = false;
+        
+        const startPress = (e) => {
+            isLongPress = false;
             pressTimer = setTimeout(() => {
-                readingOpenAddNoteModal(book.id);
+                isLongPress = true;
+                // 震动反馈 (如果支持)
+                if (navigator.vibrate) navigator.vibrate(50);
+                // 暂时用 alert 替代，后续可实现 readingOpenAddNoteModal
+                alert(`为《${book.title}》添加笔记功能开发中...`);
             }, 800);
         };
-        card.onmouseup = card.onmouseleave = card.ontouchend = () => {
+        
+        const endPress = (e) => {
             clearTimeout(pressTimer);
         };
 
+        card.onmousedown = startPress;
+        card.ontouchstart = startPress;
+        card.onmouseup = endPress;
+        card.onmouseleave = endPress;
+        card.ontouchend = endPress;
+        
+        // 只有不是长按时才触发点击进入阅读页
+        card.onclick = (e) => {
+            if (!isLongPress) {
+                readingOpenBook(book.id);
+            }
+        };
+
         card.innerHTML = `
-            <div style="width: 100%; aspect-ratio: 3/4; background: #EAEAEA; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.05); position: relative;">
-                ${book.cover ? `<img src="${book.cover}" style="width: 100%; height: 100%; object-fit: cover;">` : `<div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: #999; font-size: 12px;">暂无封面</div>`}
+            <div style="width: 100%; aspect-ratio: 3/4; background: #F4F4F5; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.04); position: relative; border: 1px solid rgba(0,0,0,0.05);">
+                ${book.cover ? `<img src="${book.cover}" style="width: 100%; height: 100%; object-fit: cover;">` : `<div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: #A1A1A6; font-size: 13px; font-weight: 500;">暂无封面</div>`}
             </div>
-            <div style="font-size: 14px; font-weight: 600; color: #111; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${book.title}</div>
-            <div style="font-size: 11px; color: #888;">已读 ${progress.toFixed(2)}%</div>
+            <div style="font-size: 15px; font-weight: 600; color: #1C1C1E; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 4px;">${book.title}</div>
+            <div style="font-size: 12px; color: #8E8E93; font-weight: 400;">已读 ${progress.toFixed(1)}%</div>
         `;
         grid.appendChild(card);
     });
@@ -9138,19 +9189,20 @@ function readingOpenBook(bookId) {
 
     readingCurrentBookId = bookId;
     readingCurrentChapterIndex = book.currentChapter || 0;
-    
+
     document.getElementById('reading-view-bookshelf').style.display = 'none';
     document.getElementById('reading-view-reader').style.display = 'flex';
-    
-    document.getElementById('reader-book-title-display').innerText = book.title;
-    
+
+    document.getElementById('reading-current-book-title').innerText = book.title;
+
     const char = wcState.characters.find(c => c.id === wcState.activeChatId);
     if (char) {
-        document.getElementById('reader-char-avatar').src = char.avatar;
+        document.getElementById('reading-char-avatar-img').src = char.avatar;
+        document.getElementById('reading-char-avatar-img').style.display = 'block';
     }
 
     readingRenderChapter();
-    
+
     // 开始计时
     readingStartTime = Date.now();
     if (readingTimer) clearInterval(readingTimer);
@@ -9158,14 +9210,14 @@ function readingOpenBook(bookId) {
     readingUpdateStats();
 }
 
-function readingExitReader() {
+function closeReadingPage() {
     if (readingTimer) clearInterval(readingTimer);
-    
+
     // 保存进度
     const book = wcState.readingBooks.find(b => b.id === readingCurrentBookId);
     if (book) {
         book.currentChapter = readingCurrentChapterIndex;
-        const contentArea = document.getElementById('reader-content-area');
+        const contentArea = document.getElementById('reading-content-area');
         if (contentArea.scrollHeight > 0) {
             const scrollProgress = contentArea.scrollTop / (contentArea.scrollHeight - contentArea.clientHeight);
             book.progress = (readingCurrentChapterIndex + scrollProgress) / book.chapters.length * 100;
@@ -9183,30 +9235,46 @@ function readingRenderChapter() {
     if (!book || !book.chapters || book.chapters.length === 0) return;
 
     const chapter = book.chapters[readingCurrentChapterIndex];
-    const contentArea = document.getElementById('reader-content-area');
-    
+    const contentArea = document.getElementById('reading-content-area');
+
     contentArea.innerHTML = `
         <h2 style="font-size: 22px; font-weight: 700; margin-bottom: 30px; color: #111;">${chapter.title}</h2>
         <div style="white-space: pre-wrap;">${chapter.content}</div>
     `;
-    
+
     contentArea.scrollTop = 0;
-    
+
     // 更新进度条
-    const slider = document.getElementById('reader-progress-slider');
+    const slider = document.getElementById('reading-progress-slider');
     if (slider) {
         slider.value = (readingCurrentChapterIndex / Math.max(1, book.chapters.length - 1)) * 100;
     }
+    
+    document.getElementById('reading-progress-text').innerText = ((readingCurrentChapterIndex / Math.max(1, book.chapters.length - 1)) * 100).toFixed(2) + '%';
 }
 
-function readingToggleMenu() {
-    const topBar = document.getElementById('reader-top-bar');
-    const bottomMenu = document.getElementById('reader-bottom-menu');
-    
-    if (topBar.style.transform === 'translateY(0%)') {
+function toggleReadingMenu(e) {
+    if (e) e.stopPropagation();
+    const topBar = document.getElementById('reading-menu-top');
+    const bottomMenu = document.getElementById('reading-menu-bottom');
+    const overlay = document.getElementById('reading-menu-overlay');
+    const header = document.getElementById('reading-reader-header');
+    const footer = document.getElementById('reading-reader-footer');
+
+    if (overlay.style.display === 'block') {
         topBar.style.transform = 'translateY(-100%)';
         bottomMenu.style.transform = 'translateY(100%)';
+        setTimeout(() => {
+            overlay.style.display = 'none';
+            header.style.opacity = '0.6';
+            footer.style.opacity = '0.6';
+        }, 300);
     } else {
+        overlay.style.display = 'block';
+        header.style.opacity = '0';
+        footer.style.opacity = '0';
+        // 强制重绘
+        void topBar.offsetWidth;
         topBar.style.transform = 'translateY(0%)';
         bottomMenu.style.transform = 'translateY(0%)';
         readingUpdateStats();
@@ -9219,25 +9287,29 @@ function readingUpdateStats() {
 
     // 时长
     const minutes = Math.floor((Date.now() - readingStartTime) / 60000) + (book.readTime || 0);
-    document.getElementById('reader-stat-time').innerText = minutes;
+    document.getElementById('reading-stat-time').innerText = minutes;
 
     // 进度
-    const contentArea = document.getElementById('reader-content-area');
+    const contentArea = document.getElementById('reading-content-area');
     let scrollProgress = 0;
     if (contentArea.scrollHeight > contentArea.clientHeight) {
         scrollProgress = contentArea.scrollTop / (contentArea.scrollHeight - contentArea.clientHeight);
     }
     const totalProgress = ((readingCurrentChapterIndex + scrollProgress) / Math.max(1, book.chapters.length)) * 100;
-    document.getElementById('reader-stat-progress').innerText = totalProgress.toFixed(2) + '%';
+    document.getElementById('reading-stat-progress').innerText = totalProgress.toFixed(2) + '%';
 
     // 速度 (估算)
     const words = book.chapters[readingCurrentChapterIndex]?.content.length || 0;
     const speed = minutes > 0 ? Math.floor(words / Math.max(1, minutes)) : 0;
-    document.getElementById('reader-stat-speed').innerText = speed;
+    document.getElementById('reading-stat-speed').innerText = speed;
 
     // 笔记数
     const notesCount = book.notes ? book.notes.length : 0;
-    document.getElementById('reader-stat-notes').innerText = notesCount;
+    document.getElementById('reading-stat-notes').innerText = notesCount;
+    
+    // 更新底部时间
+    const now = new Date();
+    document.getElementById('reading-battery-time').innerText = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
 }
 
 function readingPrevChapter() {
@@ -9258,7 +9330,7 @@ function readingNextChapter() {
 function readingSeekProgress(val) {
     const book = wcState.readingBooks.find(b => b.id === readingCurrentBookId);
     if (!book) return;
-    
+
     const targetIndex = Math.floor((val / 100) * (book.chapters.length - 1));
     if (targetIndex !== readingCurrentChapterIndex) {
         readingCurrentChapterIndex = targetIndex;
@@ -9266,7 +9338,7 @@ function readingSeekProgress(val) {
     }
 }
 
-function readingOpenToc() {
+function openReadingToc() {
     const book = wcState.readingBooks.find(b => b.id === readingCurrentBookId);
     if (!book) return;
 
@@ -9280,16 +9352,28 @@ function readingOpenToc() {
         item.onclick = () => {
             readingCurrentChapterIndex = idx;
             readingRenderChapter();
-            wcCloseModal('reading-modal-toc');
-            readingToggleMenu();
+            closeReadingToc();
+            toggleReadingMenu();
         };
         list.appendChild(item);
     });
 
-    wcOpenModal('reading-modal-toc');
+    document.getElementById('reading-toc-overlay').style.display = 'block';
+    setTimeout(() => {
+        document.getElementById('reading-toc-overlay').style.opacity = '1';
+        document.getElementById('reading-toc-sidebar').style.transform = 'translateX(0)';
+    }, 10);
 }
 
-function readingOpenNotes() {
+function closeReadingToc() {
+    document.getElementById('reading-toc-sidebar').style.transform = 'translateX(-100%)';
+    document.getElementById('reading-toc-overlay').style.opacity = '0';
+    setTimeout(() => {
+        document.getElementById('reading-toc-overlay').style.display = 'none';
+    }, 300);
+}
+
+function openReadingNotes() {
     const book = wcState.readingBooks.find(b => b.id === readingCurrentBookId);
     if (!book) return;
 
@@ -9305,11 +9389,8 @@ function readingOpenNotes() {
             item.onclick = () => {
                 readingCurrentChapterIndex = note.chapterIndex || 0;
                 readingRenderChapter();
-                wcCloseModal('reading-modal-notes');
-                const topBar = document.getElementById('reader-top-bar');
-                if (topBar.style.transform === 'translateY(0%)') {
-                    readingToggleMenu();
-                }
+                closeReadingNotes();
+                toggleReadingMenu();
             };
             item.innerHTML = `
                 <div style="font-size: 12px; color: #888; margin-bottom: 8px;">${note.chapterTitle}</div>
@@ -9320,54 +9401,45 @@ function readingOpenNotes() {
         });
     }
 
-    wcOpenModal('reading-modal-notes');
+    document.getElementById('reading-notes-view').style.transform = 'translateY(0)';
 }
 
-function readingOpenAddNoteModal(bookId) {
-    const book = wcState.readingBooks.find(b => b.id === bookId);
-    if (!book) return;
-    
-    readingCurrentBookId = bookId;
-    const chapterTitle = book.chapters[book.currentChapter || 0]?.title || '未知章节';
-    document.getElementById('reading-note-context').innerText = `当前位置：${chapterTitle}`;
-    document.getElementById('reading-note-input').value = '';
-    
-    wcOpenModal('reading-modal-add-note');
+function closeReadingNotes() {
+    document.getElementById('reading-notes-view').style.transform = 'translateY(100%)';
 }
 
-function readingSaveNote() {
-    const content = document.getElementById('reading-note-input').value.trim();
-    if (!content) return alert('笔记内容不能为空');
-
+function addReadingNote() {
     const book = wcState.readingBooks.find(b => b.id === readingCurrentBookId);
     if (!book) return;
 
+    const chapterTitle = book.chapters[readingCurrentChapterIndex || 0]?.title || '未知章节';
+    
+    const content = prompt(`添加笔记 (${chapterTitle}):`);
+    if (!content) return;
+
     if (!book.notes) book.notes = [];
-    
-    const chapterTitle = book.chapters[readingCurrentChapterIndex || book.currentChapter || 0]?.title || '未知章节';
-    
+
     book.notes.push({
         id: Date.now(),
-        chapterIndex: readingCurrentChapterIndex || book.currentChapter || 0,
+        chapterIndex: readingCurrentChapterIndex || 0,
         chapterTitle: chapterTitle,
         content: content,
         time: Date.now()
     });
 
     wcSaveData();
-    wcCloseModal('reading-modal-add-note');
     alert('笔记已保存');
 }
 
 let readingIsNightMode = false;
-function readingToggleNightMode() {
+function toggleReadingNightMode() {
     readingIsNightMode = !readingIsNightMode;
     const readerView = document.getElementById('reading-view-reader');
-    const contentArea = document.getElementById('reader-content-area');
-    const topBar = document.getElementById('reader-top-bar');
-    const bottomMenu = document.getElementById('reader-bottom-menu');
-    const nightIcon = document.getElementById('reader-icon-night');
-    const nightText = document.getElementById('reader-text-night');
+    const contentArea = document.getElementById('reading-content-area');
+    const topBar = document.getElementById('reading-menu-top');
+    const bottomMenu = document.getElementById('reading-menu-bottom');
+    const nightIcon = document.getElementById('reading-night-icon');
+    const nightText = document.getElementById('reading-night-text');
 
     if (readingIsNightMode) {
         readerView.style.background = '#1A1A1A';
@@ -9376,46 +9448,122 @@ function readingToggleNightMode() {
         bottomMenu.style.background = 'rgba(26, 26, 26, 0.95)';
         topBar.style.color = '#A0A0A0';
         bottomMenu.style.color = '#A0A0A0';
-        document.getElementById('reader-book-title-display').style.color = '#A0A0A0';
-        
+        document.getElementById('reading-current-book-title').style.color = '#A0A0A0';
+
         // Update stats text color
-        ['reader-stat-time', 'reader-stat-progress', 'reader-stat-speed', 'reader-stat-notes'].forEach(id => {
+        ['reading-stat-time', 'reading-stat-progress', 'reading-stat-speed', 'reading-stat-notes'].forEach(id => {
             document.getElementById(id).style.color = '#A0A0A0';
         });
-        
+
         // Update SVG strokes
         const svgs = bottomMenu.querySelectorAll('svg');
         svgs.forEach(svg => svg.style.stroke = '#A0A0A0');
-        topBar.querySelector('svg').style.stroke = '#A0A0A0';
+        topBar.querySelectorAll('svg').forEach(svg => svg.style.stroke = '#A0A0A0');
 
         nightIcon.innerHTML = '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"></path>';
         nightText.innerText = '日间';
     } else {
         readerView.style.background = '#F4F1EA';
         contentArea.style.color = '#333';
-        topBar.style.background = 'rgba(244, 241, 234, 0.95)';
-        bottomMenu.style.background = 'rgba(244, 241, 234, 0.95)';
+        topBar.style.background = 'rgba(255, 255, 255, 0.95)';
+        bottomMenu.style.background = 'rgba(255, 255, 255, 0.95)';
         topBar.style.color = '#111';
         bottomMenu.style.color = '#111';
-        document.getElementById('reader-book-title-display').style.color = '#111';
-        
+        document.getElementById('reading-current-book-title').style.color = '#888';
+
         // Update stats text color
-        ['reader-stat-time', 'reader-stat-progress', 'reader-stat-speed', 'reader-stat-notes'].forEach(id => {
+        ['reading-stat-time', 'reading-stat-progress', 'reading-stat-speed', 'reading-stat-notes'].forEach(id => {
             document.getElementById(id).style.color = '#111';
         });
-        
+
         // Update SVG strokes
         const svgs = bottomMenu.querySelectorAll('svg');
-        svgs.forEach(svg => svg.style.stroke = '#111');
-        topBar.querySelector('svg').style.stroke = '#111';
+        svgs.forEach(svg => svg.style.stroke = 'currentColor');
+        topBar.querySelectorAll('svg').forEach(svg => svg.style.stroke = 'currentColor');
 
         nightIcon.innerHTML = '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>';
         nightText.innerText = '夜间';
     }
 }
 
-function readingOpenSettings() {
-    alert('设置功能开发中...');
+function openReadingSettings() {
+    wcOpenModal('reading-settings-modal');
+}
+
+function changeReadingFontSize(delta) {
+    const contentArea = document.getElementById('reading-content-area');
+    let currentSize = parseInt(window.getComputedStyle(contentArea).fontSize);
+    let newSize = currentSize + delta;
+    if (newSize >= 12 && newSize <= 30) {
+        contentArea.style.fontSize = newSize + 'px';
+        document.getElementById('reading-font-size-display').innerText = newSize;
+    }
+}
+
+function changeReadingBg(bgColor, textColor) {
+    const readerView = document.getElementById('reading-view-reader');
+    const contentArea = document.getElementById('reading-content-area');
+    
+    readerView.style.background = bgColor;
+    contentArea.style.color = textColor;
+    
+    // 如果切换了背景，自动关闭夜间模式
+    if (readingIsNightMode && bgColor !== '#1A1A1A') {
+        toggleReadingNightMode();
+    } else if (!readingIsNightMode && bgColor === '#1A1A1A') {
+        toggleReadingNightMode();
+    }
+}
+
+function importLocalBook(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const content = e.target.result;
+        const title = file.name.replace('.txt', '');
+        
+        // 简单的按章节分割 (假设以 "第x章" 开头)
+        const chapters = [];
+        const lines = content.split('\n');
+        let currentChapter = { title: '前言', content: '' };
+        
+        const chapterRegex = /^第[一二三四五六七八九十百千万0-9]+[章回节卷]/;
+        
+        lines.forEach(line => {
+            if (chapterRegex.test(line.trim())) {
+                if (currentChapter.content.trim()) {
+                    chapters.push(currentChapter);
+                }
+                currentChapter = { title: line.trim(), content: '' };
+            } else {
+                currentChapter.content += line + '\n';
+            }
+        });
+        
+        if (currentChapter.content.trim()) {
+            chapters.push(currentChapter);
+        }
+
+        if (!wcState.readingBooks) wcState.readingBooks = [];
+        
+        wcState.readingBooks.push({
+            id: 'book_' + Date.now(),
+            title: title,
+            cover: '',
+            chapters: chapters,
+            currentChapter: 0,
+            progress: 0,
+            readTime: 0,
+            notes: []
+        });
+        
+        wcSaveData();
+        readingRenderBookshelf();
+        alert('导入成功！');
+    };
+    reader.readAsText(file);
 }
 
 
