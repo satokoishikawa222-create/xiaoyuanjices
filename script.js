@@ -39941,7 +39941,10 @@ document.addEventListener('click', (e) => {
 
     // ===== 菜单栏逻辑 =====
     // ===== 顶部栏自动隐藏 (Step 19) =====
+    var raTopBarInited = false;
     function initTopBarAutoHide() {
+        if (raTopBarInited) return;
+        raTopBarInited = true;
         var body = document.getElementById('reading-body');
         var topbar = document.getElementById('reading-topbar');
         if (!body || !topbar) return;
@@ -39961,19 +39964,24 @@ document.addEventListener('click', (e) => {
         }, { passive: true });
     }
 
+    var raTapZoneInited = false;
     function initTapZone() {
+        if (raTapZoneInited) return;
+        raTapZoneInited = true;
         var body = document.getElementById('reading-body');
         if (!body) return;
-        var tapZone = document.getElementById('reading-tap-zone');
 
-        // 用 click 事件代替 touch — click 不会被滚动、滑动触发
         body.addEventListener('click', function(e) {
-            // 如果点击的是标记文字、按钮等交互元素，不触发菜单
-            if (e.target.closest && (e.target.closest('button, a, .char-annotation, .ra-action-item, [onclick]'))) return;
-            // 检查是否有选中文字
+            // 只在阅读页可见时响应
+            var rp = document.getElementById('reading-page');
+            if (!rp || rp.style.display === 'none') return;
+            // 如果点击的是交互元素，不触发菜单
+            if (e.target.closest && e.target.closest('button, a, .char-annotation, .ra-action-item, [onclick]')) return;
+            // 有选中文字时不触发
             var sel = window.getSelection();
             if (sel && sel.toString().trim().length > 0) return;
             // 检查点击是否在中心区域
+            var tapZone = document.getElementById('reading-tap-zone');
             if (!tapZone) return;
             var rect = tapZone.getBoundingClientRect();
             if (rect.width === 0 || rect.height === 0) return;
@@ -40125,7 +40133,10 @@ document.addEventListener('click', (e) => {
     };
 
     // ===== 笔记功能 (Step 16: Selection API 增强) =====
+    var raLongPressInited = false;
     function initLongPress() {
+        if (raLongPressInited) return;
+        raLongPressInited = true;
         var contentEl = document.getElementById('reading-content');
         if (!contentEl) return;
         var timer = null;
@@ -41180,7 +41191,7 @@ document.addEventListener('click', (e) => {
         contentEl.style.padding = '20px ' + (pxMap[s.paddingX || 'medium'] || '6%');
         if (s.textColor) contentEl.style.color = s.textColor;
         if (s.fontFamily) {
-            var fMap = { sans:'-apple-system,"Helvetica Neue",Arial,sans-serif', serif:'Georgia,"Times New Roman",serif', handwriting:'"Ma Shan Zheng","ZCOOL XiaoWei",cursive' };
+            var fMap = { sans:'-apple-system,"Helvetica Neue",Arial,sans-serif', songti:'"SimSun","STSong","Songti SC",serif', msyh:'"Microsoft YaHei","PingFang SC",sans-serif' };
             contentEl.style.fontFamily = fMap[s.fontFamily] || s.fontFamily;
         }
         if (s.paraSpacing) {

@@ -1376,7 +1376,7 @@
         .ra-reading-topbar { display:flex; align-items:center; height:50px; padding:0 16px; background:#F9F8F5; border-bottom:1px solid #EAEAEA; flex-shrink:0; z-index:10; }
         .ra-reading-bookname { flex:1; text-align:center; font-size:15px; font-weight:500; color:#444; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
         .ra-reading-avatar { width:32px; height:32px; border-radius:50%; background:#F0F0F0; display:flex; align-items:center; justify-content:center; }
-        .ra-reading-body { flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch; position:relative; }
+        .ra-reading-body { flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch; position:relative; min-height:0; }
         #reading-content { padding:20px 5%; line-height:1.8; font-size:16px; color:#333; -webkit-user-select:text !important; user-select:text !important; cursor:text; -webkit-touch-callout:default; }
         #reading-content p { margin:0 0 16px 0; text-indent:2em; position:relative; -webkit-user-select:text !important; user-select:text !important; }
         #reading-content p.ra-has-note { border-left:3px solid #bf9e6a; padding-left:10px; }
@@ -1580,7 +1580,7 @@
                 </div>
 
                 <!-- ======== 阅读页 ======== -->
-                <div id="reading-page" style="display:none; width:100%; height:100%; flex-direction:column; background:#F9F8F5;">
+                <div id="reading-page" style="display:none; width:100%; height:100%; flex-direction:column; background:#F9F8F5; overflow:hidden;">
                     <div class="ra-reading-topbar" id="reading-topbar">
                         <div class="ra-back-btn" onclick="closeReadingPage()">
                             <svg width="10" height="17" viewBox="0 0 10 17" fill="none"><path d="M9 1L1.5 8.5L9 16" stroke="#333" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
