@@ -39701,27 +39701,61 @@ document.addEventListener('click', (e) => {
         var method = prompt('输入封面图片URL，或留空选择本地上传：');
         if (method === null) return;
         if (method.trim()) {
-            // URL
+            // URL — 直接存链接，不占 localStorage 空间
             var books = getBooks();
-            if (books[idx]) { books[idx].coverImage = method.trim(); saveBooks(books); restoreBookshelf(); }
+            if (books[idx]) {
+                books[idx].coverImage = method.trim();
+                try { saveBooks(books); } catch(e) { alert('保存失败：存储空间不足'); return; }
+                restoreBookshelf();
+            }
         } else {
-            // 本地上传
+            // 本地上传 — 压缩后存 base64
             var input = document.createElement('input');
             input.type = 'file';
-            input.accept = 'image/*';
+            input.accept = 'image/jpeg,image/png,image/webp';
             input.onchange = function(e) {
                 var file = e.target.files[0];
                 if (!file) return;
-                var reader = new FileReader();
-                reader.onload = function(ev) {
+                compressCoverImage(file, function(dataUrl) {
                     var books = getBooks();
-                    if (books[idx]) { books[idx].coverImage = ev.target.result; saveBooks(books); restoreBookshelf(); }
-                };
-                reader.readAsDataURL(file);
+                    if (books[idx]) {
+                        books[idx].coverImage = dataUrl;
+                        try { saveBooks(books); } catch(e) { alert('保存失败：图片太大或存储空间不足'); return; }
+                        restoreBookshelf();
+                    }
+                });
             };
             input.click();
         }
     };
+
+    // 压缩封面图到合理大小
+    function compressCoverImage(file, callback) {
+        var img = new Image();
+        var url = URL.createObjectURL(file);
+        img.onload = function() {
+            var maxW = 200, maxH = 300;
+            var w = img.width, h = img.height;
+            if (w > maxW || h > maxH) {
+                var ratio = Math.min(maxW / w, maxH / h);
+                w = Math.round(w * ratio);
+                h = Math.round(h * ratio);
+            }
+            var canvas = document.createElement('canvas');
+            canvas.width = w;
+            canvas.height = h;
+            var ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, w, h);
+            var dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+            URL.revokeObjectURL(url);
+            callback(dataUrl);
+        };
+        img.onerror = function() {
+            URL.revokeObjectURL(url);
+            alert('图片加载失败');
+        };
+        img.src = url;
+    }
 
     window.deleteBook = function() {
         closeBookCardMenu();
@@ -39928,13 +39962,26 @@ document.addEventListener('click', (e) => {
     }
 
     function initTapZone() {
+        var body = document.getElementById('reading-body');
+        if (!body) return;
         var tapZone = document.getElementById('reading-tap-zone');
-        if (tapZone) {
-            tapZone.onclick = function(e) {
-                e.stopPropagation();
+
+        // 用 click 事件代替 touch — click 不会被滚动、滑动触发
+        body.addEventListener('click', function(e) {
+            // 如果点击的是标记文字、按钮等交互元素，不触发菜单
+            if (e.target.closest && (e.target.closest('button, a, .char-annotation, .ra-action-item, [onclick]'))) return;
+            // 检查是否有选中文字
+            var sel = window.getSelection();
+            if (sel && sel.toString().trim().length > 0) return;
+            // 检查点击是否在中心区域
+            if (!tapZone) return;
+            var rect = tapZone.getBoundingClientRect();
+            if (rect.width === 0 || rect.height === 0) return;
+            var x = e.clientX, y = e.clientY;
+            if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
                 toggleReadingMenu();
-            };
-        }
+            }
+        });
     }
 
     function toggleReadingMenu() {
@@ -40083,15 +40130,16 @@ document.addEventListener('click', (e) => {
         if (!contentEl) return;
         var timer = null;
         var touchTarget = null;
+        var moved = false;
         contentEl.addEventListener('touchstart', function(e) {
             touchTarget = e.target;
+            moved = false;
             // 只在 p 或 p 内的子元素上触发
             var p = touchTarget.closest ? touchTarget.closest('p') : null;
             if (!p && touchTarget.tagName === 'P') p = touchTarget;
             if (!p) return;
             timer = setTimeout(function() {
-                raPendingParagraph = p;
-                // 尝试用 Selection API 获取选中文字
+                // Check if user has selected text via native selection
                 var sel = window.getSelection();
                 if (sel && sel.toString().trim().length > 0) {
                     raSelectedText = sel.toString().substring(0, 200);
@@ -40100,11 +40148,15 @@ document.addEventListener('click', (e) => {
                     raSelectedText = p.textContent.substring(0, 100);
                     raSelectionRange = null;
                 }
+                raPendingParagraph = p;
                 showParagraphMenu();
-            }, 600);
+            }, 800);
         }, { passive: true });
         contentEl.addEventListener('touchend', function() { clearTimeout(timer); });
-        contentEl.addEventListener('touchmove', function() { clearTimeout(timer); });
+        contentEl.addEventListener('touchmove', function(e) {
+            moved = true;
+            clearTimeout(timer);
+        });
     }
 
     var raSelectionRange = null; // 保存用户选区 Range
@@ -40778,7 +40830,7 @@ document.addEventListener('click', (e) => {
         var s = getSettings(); s.fontFamily = v; saveSettings(s);
         var contentEl = document.getElementById('reading-content');
         if (!contentEl) return;
-        var map = { sans: '-apple-system, "Helvetica Neue", Arial, sans-serif', serif: 'Georgia, "Times New Roman", serif', handwriting: '"Ma Shan Zheng", "ZCOOL XiaoWei", cursive' };
+        var map = { sans: '-apple-system, "Helvetica Neue", Arial, sans-serif', songti: '"SimSun", "STSong", "Songti SC", serif', msyh: '"Microsoft YaHei", "PingFang SC", sans-serif' };
         if (map[v]) { contentEl.style.fontFamily = map[v]; }
         else { contentEl.style.fontFamily = v; } // custom font name
     };
@@ -40864,7 +40916,14 @@ document.addEventListener('click', (e) => {
         if (!body) return;
         body.style.overflow = '';
         var contentEl = document.getElementById('reading-content');
-        if (contentEl) contentEl.style.transform = '';
+        if (contentEl) {
+            contentEl.style.transform = '';
+            contentEl.style.transition = '';
+            contentEl.style.columnWidth = '';
+            contentEl.style.columnGap = '';
+            contentEl.style.columnFill = '';
+            contentEl.style.height = '';
+        }
         body.removeEventListener('touchstart', onPageTouchStart);
         body.removeEventListener('touchend', onPageTouchEnd);
     }
@@ -40873,34 +40932,116 @@ document.addEventListener('click', (e) => {
         var body = document.getElementById('reading-body');
         var contentEl = document.getElementById('reading-content');
         if (!body || !contentEl) return;
-        var pageH = body.clientHeight;
-        var totalH = contentEl.scrollHeight;
-        raPaginatedState.pages = Math.max(1, Math.ceil(totalH / pageH));
-        raPaginatedState.currentPage = 0;
-        contentEl.style.transition = 'transform 0.3s ease';
+        var s = getSettings();
+        var mode = s.pageMode || 'scroll';
+
+        if (mode === 'smooth') {
+            // Horizontal paging: use columns
+            var pageW = body.clientWidth;
+            var pageH = body.clientHeight;
+            contentEl.style.columnWidth = pageW + 'px';
+            contentEl.style.columnGap = '0px';
+            contentEl.style.height = pageH + 'px';
+            contentEl.style.columnFill = 'auto';
+            // Wait for column layout to settle, then count pages
+            setTimeout(function() {
+                var totalW = contentEl.scrollWidth;
+                raPaginatedState.pages = Math.max(1, Math.ceil(totalW / pageW));
+                raPaginatedState.currentPage = 0;
+                contentEl.style.transition = 'transform 0.4s cubic-bezier(0.25, 0.1, 0.25, 1)';
+                contentEl.style.transform = 'translateX(0)';
+            }, 50);
+        } else {
+            // Vertical paging (flip mode)
+            contentEl.style.columnWidth = '';
+            contentEl.style.columnGap = '';
+            contentEl.style.columnFill = '';
+            contentEl.style.height = '';
+            var pageH = body.clientHeight;
+            var totalH = contentEl.scrollHeight;
+            raPaginatedState.pages = Math.max(1, Math.ceil(totalH / pageH));
+            raPaginatedState.currentPage = 0;
+            contentEl.style.transition = 'transform 0.5s cubic-bezier(0.2, 0.8, 0.3, 1)';
+            contentEl.style.transform = 'translateY(0)';
+        }
     }
 
-    function onPageTouchStart(e) { raPaginatedState.startX = e.touches[0].clientX; }
+    function onPageTouchStart(e) { raPaginatedState.startX = e.touches[0].clientX; raPaginatedState.startY = e.touches[0].clientY; raPaginatedState.swiped = false; }
     function onPageTouchEnd(e) {
         var dx = e.changedTouches[0].clientX - raPaginatedState.startX;
+        var dy = e.changedTouches[0].clientY - raPaginatedState.startY;
         var body = document.getElementById('reading-body');
         if (!body) return;
-        var pageH = body.clientHeight;
-        if (dx < -50 && raPaginatedState.currentPage < raPaginatedState.pages - 1) {
-            raPaginatedState.currentPage++;
-        } else if (dx > 50 && raPaginatedState.currentPage > 0) {
-            raPaginatedState.currentPage--;
-        }
-        var contentEl = document.getElementById('reading-content');
-        if (contentEl) {
-            var s = getSettings();
-            if (s.pageMode === 'flip') {
-                contentEl.style.transition = 'transform 0.5s cubic-bezier(0.2,0.8,0.3,1)';
-            } else {
-                contentEl.style.transition = 'transform 0.3s ease';
+        var s = getSettings();
+        var mode = s.pageMode || 'scroll';
+
+        // Only handle horizontal swipes (ignore vertical or taps)
+        if (Math.abs(dx) < 50 || Math.abs(dy) > Math.abs(dx)) return;
+
+        raPaginatedState.swiped = true;
+
+        if (mode === 'smooth') {
+            // Horizontal paging
+            var pageW = body.clientWidth;
+            if (dx < -50 && raPaginatedState.currentPage < raPaginatedState.pages - 1) {
+                raPaginatedState.currentPage++;
+            } else if (dx > 50 && raPaginatedState.currentPage > 0) {
+                raPaginatedState.currentPage--;
+            } else if (dx < -50 && raPaginatedState.currentPage >= raPaginatedState.pages - 1) {
+                showFinishToast();
+                return;
             }
-            contentEl.style.transform = 'translateY(-' + (raPaginatedState.currentPage * pageH) + 'px)';
+            var contentEl = document.getElementById('reading-content');
+            if (contentEl) {
+                contentEl.style.transition = 'transform 0.4s cubic-bezier(0.25, 0.1, 0.25, 1)';
+                contentEl.style.transform = 'translateX(-' + (raPaginatedState.currentPage * pageW) + 'px)';
+            }
+        } else if (mode === 'flip') {
+            // Flip paging with 3D page curl
+            var pageH = body.clientHeight;
+            if (dx < -50 && raPaginatedState.currentPage < raPaginatedState.pages - 1) {
+                raPaginatedState.currentPage++;
+                flipPageAnimation(body, 'next');
+            } else if (dx > 50 && raPaginatedState.currentPage > 0) {
+                raPaginatedState.currentPage--;
+                flipPageAnimation(body, 'prev');
+            } else if (dx < -50 && raPaginatedState.currentPage >= raPaginatedState.pages - 1) {
+                showFinishToast();
+                return;
+            }
+            var contentEl = document.getElementById('reading-content');
+            if (contentEl) {
+                contentEl.style.transition = 'transform 0.5s cubic-bezier(0.2, 0.8, 0.3, 1)';
+                contentEl.style.transform = 'translateY(-' + (raPaginatedState.currentPage * pageH) + 'px)';
+            }
         }
+    }
+
+    function showFinishToast() {
+        var existing = document.getElementById('ra-finish-toast');
+        if (existing) existing.remove();
+        var toast = document.createElement('div');
+        toast.id = 'ra-finish-toast';
+        toast.textContent = '已经看完啦~';
+        toast.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.7);color:#fff;padding:14px 28px;border-radius:12px;font-size:15px;z-index:999;pointer-events:none;animation:ra-toast-fade 2s forwards;';
+        var style = document.createElement('style');
+        style.textContent = '@keyframes ra-toast-fade{0%,60%{opacity:1}100%{opacity:0}}';
+        toast.appendChild(style);
+        document.body.appendChild(toast);
+        setTimeout(function() { if (toast.parentNode) toast.remove(); }, 2000);
+    }
+
+    function flipPageAnimation(container, direction) {
+        // Add a brief 3D flip overlay effect
+        var overlay = document.createElement('div');
+        overlay.style.cssText = 'position:absolute;top:0;left:0;right:0;bottom:0;z-index:10;pointer-events:none;' +
+            'background:linear-gradient(to ' + (direction === 'next' ? 'left' : 'right') + ', rgba(0,0,0,0.08) 0%, transparent 40%);' +
+            'animation:ra-flip-shadow 0.5s forwards;';
+        var flipStyle = document.createElement('style');
+        flipStyle.textContent = '@keyframes ra-flip-shadow{0%{opacity:1}100%{opacity:0}}';
+        overlay.appendChild(flipStyle);
+        container.appendChild(overlay);
+        setTimeout(function() { if (overlay.parentNode) overlay.remove(); }, 500);
     }
 
     window.applyAnnotationFont = function(v) {

@@ -1359,7 +1359,7 @@
 
         /* ===== 书架页 ===== */
         #bookshelf-page { overflow-y:auto; }
-        .ra-bookshelf-grid { display:grid; grid-template-columns:1fr 1fr; gap:20px; padding:24px 20px; }
+        .ra-bookshelf-grid { display:grid; grid-template-columns:1fr 1fr; gap:20px; padding:24px 20px; overflow-y:auto; flex:1; -webkit-overflow-scrolling:touch; }
         .ra-book-card { background:#fff; border-radius:14px; overflow:hidden; box-shadow:0 2px 12px rgba(0,0,0,0.06); cursor:pointer; transition:transform 0.15s; }
         .ra-book-card:active { transform:scale(0.97); }
         .ra-book-cover { width:100%; aspect-ratio:3/4; display:flex; align-items:center; justify-content:center; position:relative; }
@@ -1377,10 +1377,10 @@
         .ra-reading-bookname { flex:1; text-align:center; font-size:15px; font-weight:500; color:#444; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
         .ra-reading-avatar { width:32px; height:32px; border-radius:50%; background:#F0F0F0; display:flex; align-items:center; justify-content:center; }
         .ra-reading-body { flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch; position:relative; }
-        #reading-content { padding:20px 5%; line-height:1.8; font-size:16px; color:#333; user-select:text; -webkit-user-select:text; cursor:text; }
-        #reading-content p { margin:0 0 16px 0; text-indent:2em; position:relative; }
+        #reading-content { padding:20px 5%; line-height:1.8; font-size:16px; color:#333; -webkit-user-select:text !important; user-select:text !important; cursor:text; -webkit-touch-callout:default; }
+        #reading-content p { margin:0 0 16px 0; text-indent:2em; position:relative; -webkit-user-select:text !important; user-select:text !important; }
         #reading-content p.ra-has-note { border-left:3px solid #bf9e6a; padding-left:10px; }
-        #reading-tap-zone { position:absolute; top:30%; left:25%; width:50%; height:40%; z-index:5; cursor:pointer; }
+        #reading-tap-zone { position:absolute; top:30%; left:25%; width:50%; height:40%; z-index:5; pointer-events:none; }
 
         /* ===== 阅读菜单栏 ===== */
         #reading-menu-overlay { display:none; position:fixed; top:0; left:0; right:0; bottom:0; z-index:99; }
@@ -1523,7 +1523,7 @@
             <div id="reading-root" style="width: 100%; height: 100%; position: relative; display: flex; flex-direction: column;">
 
                 <!-- ======== 书架页 ======== -->
-                <div id="bookshelf-page" style="display:none; width:100%; height:100%; flex-direction:column; background:#F5F5F5;">
+                <div id="bookshelf-page" style="display:none; width:100%; height:100%; flex-direction:column; background:#F5F5F5; overflow:hidden;">
                     <div class="ra-topbar">
                         <div class="ra-topbar-left">
                             <div class="ra-back-btn" onclick="closeBookshelf()">
@@ -1784,9 +1784,9 @@
                         <div class="ra-setting-group">
                             <label class="ra-setting-label">正文字体</label>
                             <select id="ra-fontfamily-select" class="ra-setting-input" onchange="applyFontFamily(this.value)">
-                                <option value="sans">无衬线</option>
-                                <option value="serif">衬线</option>
-                                <option value="handwriting">手写</option>
+                                <option value="sans">系统默认</option>
+                                <option value="songti">宋体</option>
+                                <option value="msyh">微软雅黑</option>
                             </select>
                             <div class="ra-custom-font-row">
                                 <button class="ra-upload-font-btn" onclick="uploadCustomFont('body')">上传字体</button>
