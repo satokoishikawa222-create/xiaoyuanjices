@@ -14710,3 +14710,59 @@ body.edit-mode-active .widget-remove-btn { display: flex; }
 #reader-progress-slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 12px; height: 12px; border-radius: 50%; background: #111; cursor: pointer; }
 #reader-progress-slider::-moz-range-thumb { width: 12px; height: 12px; border-radius: 50%; background: #111; cursor: pointer; border: none; }
 
+/* ===== 夜间模式 (阅读App Step 11) ===== */
+body.night-mode { background: #1a1814; color: #c8b99a; }
+body.night-mode #readingModal { background: #1a1814; }
+body.night-mode #bookshelf-page { background: #1a1814; }
+body.night-mode .ra-topbar { background: #1f1c18; border-bottom-color: #2a2620; }
+body.night-mode .ra-topbar-title { color: #c8b99a; }
+body.night-mode .ra-back-btn svg path { stroke: #c8b99a; }
+body.night-mode .ra-book-card { background: #252118; box-shadow: 0 2px 12px rgba(0,0,0,0.2); }
+body.night-mode .ra-book-title { color: #c8b99a; }
+body.night-mode .ra-book-progress-bar { background: #2a2620; }
+body.night-mode .ra-book-progress-fill { background: #bf9e6a; }
+body.night-mode .ra-book-add-card .ra-book-cover { background: #252118; border-color: #3a3530; }
+body.night-mode .ra-book-add-card svg path { stroke: #5a5040; }
+body.night-mode #reading-page { background: #1a1814; }
+body.night-mode .ra-reading-topbar { background: #1f1c18; border-bottom-color: #2a2620; }
+body.night-mode .ra-reading-bookname { color: #c8b99a; }
+body.night-mode .ra-reading-topbar .ra-back-btn svg path { stroke: #c8b99a; }
+body.night-mode .ra-reading-avatar { background: #252118; }
+body.night-mode .ra-reading-avatar svg circle, body.night-mode .ra-reading-avatar svg path { stroke: #5a5040; }
+body.night-mode #reading-content { color: #c8b99a; }
+body.night-mode #reading-menu { background: #1f1c18; box-shadow: 0 -4px 20px rgba(0,0,0,0.3); }
+body.night-mode .ra-menu-stat-val { color: #c8b99a; }
+body.night-mode .ra-menu-stat-label { color: #6a6050; }
+body.night-mode .ra-menu-progress-row input[type="range"] { background: #2a2620; }
+body.night-mode .ra-menu-progress-row input[type="range"]::-webkit-slider-thumb { background: #bf9e6a; }
+body.night-mode .ra-chapter-btn { background: #2a2620; }
+body.night-mode .ra-chapter-btn svg path { stroke: #c8b99a; }
+body.night-mode .ra-menu-action-btn svg path, body.night-mode .ra-menu-action-btn svg circle { stroke: #c8b99a; }
+body.night-mode .ra-menu-action-btn span { color: #8a7a60; }
+body.night-mode #catalog-panel, body.night-mode #notes-panel { background: #1f1c18; box-shadow: -4px 0 20px rgba(0,0,0,0.4); }
+body.night-mode .ra-panel-header { color: #c8b99a; border-bottom-color: #2a2620; }
+body.night-mode .ra-panel-close svg path { stroke: #c8b99a; }
+body.night-mode .ra-catalog-item { color: #a89a7a; border-bottom-color: #2a2620; }
+body.night-mode .ra-catalog-item:active { background: #252118; }
+body.night-mode .ra-catalog-item.current { color: #bf9e6a; }
+body.night-mode .ra-note-item { border-bottom-color: #2a2620; }
+body.night-mode .ra-note-chapter { color: #6a6050; }
+body.night-mode .ra-note-excerpt { color: #8a7a60; }
+body.night-mode .ra-note-content { color: #c8b99a; }
+body.night-mode .ra-note-time { color: #5a5040; }
+body.night-mode #paragraph-action-menu { background: #252118; box-shadow: 0 8px 30px rgba(0,0,0,0.4); }
+body.night-mode .ra-action-item { color: #c8b99a; border-bottom-color: #2a2620; }
+body.night-mode .ra-action-item:last-child { color: #6a6050; }
+body.night-mode #note-input-modal .ra-note-input-box { background: #1f1c18; }
+body.night-mode .ra-note-input-title { color: #c8b99a; }
+body.night-mode .ra-note-selected-text { background: #252118; color: #8a7a60; }
+body.night-mode #note-input-textarea { background: #252118; border-color: #3a3530; color: #c8b99a; }
+body.night-mode .ra-note-cancel { background: #2a2620; color: #8a7a60; }
+body.night-mode .ra-note-save { background: #bf9e6a; color: #1a1814; }
+body.night-mode .char-annotation { background: #252118; border-left-color: #bf9e6a; color: #a89a7a; }
+body.night-mode .char-annotation-name { color: #bf9e6a; }
+body.night-mode #reading-settings-panel { background: #1f1c18; }
+body.night-mode .ra-setting-label { color: #6a6050; }
+body.night-mode .ra-setting-input { background: #252118; border-color: #3a3530; color: #c8b99a; }
+body.night-mode .ra-setting-options button { background: #252118; border-color: #3a3530; color: #8a7a60; }
+body.night-mode .ra-setting-options button.active { background: #bf9e6a; color: #1a1814; border-color: #bf9e6a; }

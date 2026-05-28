@@ -1347,11 +1347,292 @@
         </div>
 
         <!-- ========================================== -->
+        <!-- App 9: 阅读App 样式 -->
+        <!-- ========================================== -->
+        <style>
+        /* ===== 阅读App 通用 ===== */
+        .ra-topbar { display:flex; align-items:center; height:50px; padding:0 16px; background:#F5F5F5; border-bottom:1px solid #EAEAEA; flex-shrink:0; }
+        .ra-topbar-left, .ra-topbar-right { width:40px; }
+        .ra-topbar-title { flex:1; text-align:center; font-size:17px; font-weight:600; color:#222; letter-spacing:0.5px; }
+        .ra-back-btn { width:36px; height:36px; display:flex; align-items:center; justify-content:center; cursor:pointer; border-radius:50%; }
+        .ra-back-btn:active { background:rgba(0,0,0,0.05); }
+
+        /* ===== 书架页 ===== */
+        #bookshelf-page { overflow-y:auto; }
+        .ra-bookshelf-grid { display:grid; grid-template-columns:1fr 1fr; gap:20px; padding:24px 20px; }
+        .ra-book-card { background:#fff; border-radius:14px; overflow:hidden; box-shadow:0 2px 12px rgba(0,0,0,0.06); cursor:pointer; transition:transform 0.15s; }
+        .ra-book-card:active { transform:scale(0.97); }
+        .ra-book-cover { width:100%; aspect-ratio:3/4; display:flex; align-items:center; justify-content:center; position:relative; }
+        .ra-book-cover-empty { background:#E8E8E8; }
+        .ra-book-cover-empty svg { opacity:0.35; }
+        .ra-book-cover-name { color:#fff; font-size:13px; font-weight:600; text-align:center; padding:10px; word-break:break-all; line-height:1.5; text-shadow:0 1px 3px rgba(0,0,0,0.2); }
+        .ra-book-info { padding:10px 12px 12px; }
+        .ra-book-title { font-size:13px; color:#333; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .ra-book-progress-bar { width:100%; height:3px; background:#EAEAEA; border-radius:2px; margin-top:8px; overflow:hidden; }
+        .ra-book-progress-fill { height:100%; background:#333; border-radius:2px; transition:width 0.3s; }
+        .ra-book-add-card .ra-book-cover { background:#F0F0F0; border:2px dashed #D0D0D0; }
+
+        /* ===== 阅读页 ===== */
+        .ra-reading-topbar { display:flex; align-items:center; height:50px; padding:0 16px; background:#F9F8F5; border-bottom:1px solid #EAEAEA; flex-shrink:0; z-index:10; }
+        .ra-reading-bookname { flex:1; text-align:center; font-size:15px; font-weight:500; color:#444; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .ra-reading-avatar { width:32px; height:32px; border-radius:50%; background:#F0F0F0; display:flex; align-items:center; justify-content:center; }
+        .ra-reading-body { flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch; position:relative; }
+        #reading-content { padding:20px 5%; line-height:1.8; font-size:16px; color:#333; }
+        #reading-content p { margin:0 0 16px 0; text-indent:2em; position:relative; }
+        #reading-content p.ra-has-note { border-left:3px solid #bf9e6a; padding-left:10px; }
+        #reading-tap-zone { position:absolute; top:30%; left:25%; width:50%; height:40%; z-index:5; cursor:pointer; }
+
+        /* ===== 阅读菜单栏 ===== */
+        #reading-menu-overlay { display:none; position:fixed; top:0; left:0; right:0; bottom:0; z-index:99; }
+        #reading-menu { position:fixed; bottom:-280px; left:0; right:0; background:#fff; border-top-left-radius:20px; border-top-right-radius:20px; box-shadow:0 -4px 20px rgba(0,0,0,0.08); padding:20px 20px 30px; z-index:100; transition:bottom 0.3s cubic-bezier(0.25,0.8,0.25,1); }
+        #reading-menu.show { bottom:0; }
+        #reading-menu-overlay.show { display:block; }
+        .ra-menu-stats { display:flex; justify-content:space-around; margin-bottom:18px; }
+        .ra-menu-stat-item { text-align:center; }
+        .ra-menu-stat-val { font-size:18px; font-weight:600; color:#222; }
+        .ra-menu-stat-label { font-size:11px; color:#999; margin-top:2px; }
+        .ra-menu-progress-row { display:flex; align-items:center; gap:10px; margin-bottom:18px; }
+        .ra-menu-progress-row input[type="range"] { flex:1; -webkit-appearance:none; appearance:none; height:3px; background:#E0E0E0; border-radius:2px; outline:none; }
+        .ra-menu-progress-row input[type="range"]::-webkit-slider-thumb { -webkit-appearance:none; appearance:none; width:14px; height:14px; border-radius:50%; background:#333; cursor:pointer; }
+        .ra-chapter-btn { width:32px; height:32px; border:none; background:#F0F0F0; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0; }
+        .ra-chapter-btn:active { background:#E0E0E0; }
+        .ra-menu-actions { display:flex; justify-content:space-around; }
+        .ra-menu-action-btn { display:flex; flex-direction:column; align-items:center; gap:6px; border:none; background:none; cursor:pointer; padding:8px 12px; }
+        .ra-menu-action-btn span { font-size:11px; color:#666; }
+        .ra-menu-action-btn:active { opacity:0.6; }
+
+        /* ===== 侧滑面板（目录/笔记） ===== */
+        .ra-side-overlay { display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.3); z-index:200; }
+        .ra-side-overlay.show { display:block; }
+        #catalog-panel, #notes-panel { position:fixed; top:0; right:-80%; width:75%; max-width:320px; height:100%; background:#fff; z-index:210; transition:right 0.3s cubic-bezier(0.25,0.8,0.25,1); display:flex; flex-direction:column; box-shadow:-4px 0 20px rgba(0,0,0,0.08); }
+        #catalog-panel.show, #notes-panel.show { right:0; }
+        .ra-panel-header { display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid #EAEAEA; font-size:16px; font-weight:600; color:#222; }
+        .ra-panel-close { width:32px; height:32px; display:flex; align-items:center; justify-content:center; cursor:pointer; border-radius:50%; }
+        .ra-panel-close:active { background:rgba(0,0,0,0.05); }
+        .ra-panel-list { flex:1; overflow-y:auto; padding:8px 0; }
+        .ra-catalog-item { padding:12px 20px; font-size:14px; color:#444; cursor:pointer; border-bottom:1px solid #F5F5F5; }
+        .ra-catalog-item:active { background:#F5F5F5; }
+        .ra-catalog-item.current { color:#bf9e6a; font-weight:600; }
+
+        /* ===== 笔记条目 ===== */
+        .ra-note-item { padding:14px 20px; border-bottom:1px solid #F0F0F0; cursor:pointer; }
+        .ra-note-item:active { background:#F9F9F9; }
+        .ra-note-chapter { font-size:11px; color:#999; margin-bottom:4px; }
+        .ra-note-excerpt { font-size:13px; color:#666; margin-bottom:6px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .ra-note-content { font-size:14px; color:#333; line-height:1.5; }
+        .ra-note-time { font-size:11px; color:#bbb; margin-top:6px; }
+
+        /* ===== 段落操作菜单 ===== */
+        #paragraph-action-menu { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:#fff; border-radius:14px; box-shadow:0 8px 30px rgba(0,0,0,0.15); z-index:300; min-width:180px; overflow:hidden; }
+        .ra-action-item { padding:14px 24px; font-size:15px; color:#333; text-align:center; cursor:pointer; border-bottom:1px solid #F0F0F0; }
+        .ra-action-item:last-child { border-bottom:none; color:#999; }
+        .ra-action-item:active { background:#F5F5F5; }
+
+        /* ===== 笔记输入弹窗 ===== */
+        #note-input-modal { position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.4); z-index:310; display:flex; align-items:center; justify-content:center; }
+        .ra-note-input-box { background:#fff; border-radius:16px; padding:24px; width:85%; max-width:340px; }
+        .ra-note-input-title { font-size:16px; font-weight:600; color:#222; margin-bottom:12px; }
+        .ra-note-selected-text { font-size:13px; color:#888; margin-bottom:12px; padding:10px; background:#F8F8F8; border-radius:8px; max-height:80px; overflow-y:auto; line-height:1.5; }
+        #note-input-textarea { width:100%; border:1px solid #E0E0E0; border-radius:10px; padding:12px; font-size:14px; resize:none; outline:none; font-family:inherit; box-sizing:border-box; }
+        #note-input-textarea:focus { border-color:#999; }
+        .ra-note-input-btns { display:flex; justify-content:flex-end; gap:10px; margin-top:14px; }
+        .ra-note-cancel { border:none; background:#F0F0F0; color:#666; padding:8px 20px; border-radius:8px; font-size:14px; cursor:pointer; }
+        .ra-note-save { border:none; background:#333; color:#fff; padding:8px 20px; border-radius:8px; font-size:14px; cursor:pointer; }
+
+        /* ===== 批注气泡 ===== */
+        .char-annotation { margin:8px 0 16px 0; padding:12px 14px; background:#FBF9F4; border-left:3px solid #bf9e6a; border-radius:0 10px 10px 0; font-size:13px; color:#666; line-height:1.6; }
+        .char-annotation-name { font-size:11px; color:#bf9e6a; font-weight:600; margin-bottom:4px; }
+        .char-annotation-loading { color:#bbb; font-style:italic; }
+
+        /* ===== 设置面板 ===== */
+        #reading-settings-panel { position:fixed; bottom:-100%; left:0; right:0; max-height:80%; background:#fff; border-top-left-radius:20px; border-top-right-radius:20px; box-shadow:0 -4px 20px rgba(0,0,0,0.1); z-index:210; transition:bottom 0.3s cubic-bezier(0.25,0.8,0.25,1); display:flex; flex-direction:column; }
+        #reading-settings-panel.show { bottom:0; }
+        #settings-panel-overlay.show { display:block; }
+        .ra-settings-body { flex:1; overflow-y:auto; padding:16px 20px 40px; }
+        .ra-setting-group { margin-bottom:20px; }
+        .ra-setting-label { display:block; font-size:13px; color:#888; margin-bottom:8px; }
+        .ra-setting-input { width:100%; border:1px solid #E0E0E0; border-radius:10px; padding:10px 12px; font-size:14px; outline:none; font-family:inherit; box-sizing:border-box; }
+        .ra-setting-input:focus { border-color:#999; }
+        .ra-setting-options { display:flex; gap:10px; }
+        .ra-setting-options button { flex:1; border:1px solid #E0E0E0; background:#fff; border-radius:8px; padding:8px 0; font-size:13px; color:#666; cursor:pointer; transition:all 0.15s; }
+        .ra-setting-options button.active { background:#333; color:#fff; border-color:#333; }
+        .ra-setting-options button:active { transform:scale(0.96); }
+        </style>
+
+        <!-- ========================================== -->
         <!-- App 9: 阅读App 容器 -->
         <!-- ========================================== -->
         <div class="settings-modal" id="readingModal" style="padding: 0; z-index: 3600; background: #F5F5F5;">
             <div id="reading-root" style="width: 100%; height: 100%; position: relative; display: flex; flex-direction: column;">
-                <!-- 视图将由 reading.js 动态渲染到这里 -->
+
+                <!-- ======== 书架页 ======== -->
+                <div id="bookshelf-page" style="display:none; width:100%; height:100%; flex-direction:column; background:#F5F5F5;">
+                    <div class="ra-topbar">
+                        <div class="ra-topbar-left">
+                            <div class="ra-back-btn" onclick="closeBookshelf()">
+                                <svg width="10" height="17" viewBox="0 0 10 17" fill="none"><path d="M9 1L1.5 8.5L9 16" stroke="#333" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                            </div>
+                        </div>
+                        <div class="ra-topbar-title">书架</div>
+                        <div class="ra-topbar-right"></div>
+                    </div>
+                    <div class="ra-bookshelf-grid" id="bookshelf-grid">
+                        <!-- 书卡由 JS 动态生成 -->
+                    </div>
+                </div>
+
+                <!-- ======== 阅读页 ======== -->
+                <div id="reading-page" style="display:none; width:100%; height:100%; flex-direction:column; background:#F9F8F5;">
+                    <div class="ra-reading-topbar" id="reading-topbar">
+                        <div class="ra-back-btn" onclick="closeReadingPage()">
+                            <svg width="10" height="17" viewBox="0 0 10 17" fill="none"><path d="M9 1L1.5 8.5L9 16" stroke="#333" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                        </div>
+                        <div class="ra-reading-bookname" id="reading-bookname">书名</div>
+                        <div class="ra-reading-avatar" id="reading-avatar">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke="#999" stroke-width="1.5"/><path d="M4 20c0-3.3 3.6-6 8-6s8 2.7 8 6" stroke="#999" stroke-width="1.5" stroke-linecap="round"/></svg>
+                        </div>
+                    </div>
+                    <div class="ra-reading-body" id="reading-body">
+                        <div id="reading-tap-zone"></div>
+                        <div id="reading-content"></div>
+                    </div>
+
+                    <!-- 阅读菜单栏 -->
+                    <div id="reading-menu-overlay" onclick="hideReadingMenu()"></div>
+                    <div id="reading-menu">
+                        <div class="ra-menu-stats">
+                            <div class="ra-menu-stat-item">
+                                <div class="ra-menu-stat-val" id="rm-duration">0分</div>
+                                <div class="ra-menu-stat-label">阅读时长</div>
+                            </div>
+                            <div class="ra-menu-stat-item">
+                                <div class="ra-menu-stat-val" id="rm-progress">0%</div>
+                                <div class="ra-menu-stat-label">阅读进度</div>
+                            </div>
+                            <div class="ra-menu-stat-item">
+                                <div class="ra-menu-stat-val" id="rm-speed">0</div>
+                                <div class="ra-menu-stat-label">字/分</div>
+                            </div>
+                            <div class="ra-menu-stat-item">
+                                <div class="ra-menu-stat-val" id="rm-notes">0</div>
+                                <div class="ra-menu-stat-label">笔记</div>
+                            </div>
+                        </div>
+                        <div class="ra-menu-progress-row">
+                            <button class="ra-chapter-btn" onclick="jumpChapter(-1)">
+                                <svg width="8" height="14" viewBox="0 0 8 14" fill="none"><path d="M7 1L1 7L7 13" stroke="#333" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                            </button>
+                            <input type="range" id="reading-progress-slider" min="0" max="100" value="0" oninput="onProgressSliderChange(this.value)">
+                            <button class="ra-chapter-btn" onclick="jumpChapter(1)">
+                                <svg width="8" height="14" viewBox="0 0 8 14" fill="none"><path d="M1 1L7 7L1 13" stroke="#333" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                            </button>
+                        </div>
+                        <div class="ra-menu-actions">
+                            <button class="ra-menu-action-btn" onclick="openCatalog()">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M3 6h18M3 12h12M3 18h18" stroke="#333" stroke-width="1.5" stroke-linecap="round"/></svg>
+                                <span>目录</span>
+                            </button>
+                            <button class="ra-menu-action-btn" onclick="openNotesPanel()">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M14 3l-1 8h5L10 21l1-8H6L14 3z" stroke="#333" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                                <span>笔记</span>
+                            </button>
+                            <button class="ra-menu-action-btn" id="night-mode-btn" onclick="toggleNightMode()">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" stroke="#333" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                                <span>夜间</span>
+                            </button>
+                            <button class="ra-menu-action-btn" onclick="openSettingsPanel()">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke="#333" stroke-width="1.5"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83" stroke="#333" stroke-width="1.5" stroke-linecap="round"/></svg>
+                                <span>设置</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ======== 目录面板 ======== -->
+                <div id="catalog-overlay" class="ra-side-overlay" onclick="closeCatalog()"></div>
+                <div id="catalog-panel">
+                    <div class="ra-panel-header">
+                        <span>目录</span>
+                        <div class="ra-panel-close" onclick="closeCatalog()">
+                            <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M1 1l12 12M13 1L1 13" stroke="#333" stroke-width="1.5" stroke-linecap="round"/></svg>
+                        </div>
+                    </div>
+                    <div id="catalog-list" class="ra-panel-list"></div>
+                </div>
+
+                <!-- ======== 笔记面板 ======== -->
+                <div id="notes-overlay" class="ra-side-overlay" onclick="closeNotesPanel()"></div>
+                <div id="notes-panel">
+                    <div class="ra-panel-header">
+                        <span>笔记</span>
+                        <div class="ra-panel-close" onclick="closeNotesPanel()">
+                            <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M1 1l12 12M13 1L1 13" stroke="#333" stroke-width="1.5" stroke-linecap="round"/></svg>
+                        </div>
+                    </div>
+                    <div id="notes-list" class="ra-panel-list"></div>
+                </div>
+
+                <!-- ======== 段落操作菜单 ======== -->
+                <div id="paragraph-action-menu" style="display:none;">
+                    <div class="ra-action-item" onclick="startAddNote()">添加笔记</div>
+                    <div class="ra-action-item" onclick="letCharSee()">让TA看看</div>
+                    <div class="ra-action-item" onclick="closeParagraphMenu()">取消</div>
+                </div>
+
+                <!-- ======== 笔记输入弹窗 ======== -->
+                <div id="note-input-modal" style="display:none;">
+                    <div class="ra-note-input-box">
+                        <div class="ra-note-input-title">添加笔记</div>
+                        <div class="ra-note-selected-text" id="note-selected-text"></div>
+                        <textarea id="note-input-textarea" placeholder="写下你的想法…" rows="4"></textarea>
+                        <div class="ra-note-input-btns">
+                            <button class="ra-note-cancel" onclick="closeNoteInput()">取消</button>
+                            <button class="ra-note-save" onclick="saveCurrentNote()">保存</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ======== 设置面板 ======== -->
+                <div id="settings-panel-overlay" class="ra-side-overlay" onclick="closeSettingsPanel()"></div>
+                <div id="reading-settings-panel">
+                    <div class="ra-panel-header">
+                        <span>设置</span>
+                        <div class="ra-panel-close" onclick="closeSettingsPanel()">
+                            <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M1 1l12 12M13 1L1 13" stroke="#333" stroke-width="1.5" stroke-linecap="round"/></svg>
+                        </div>
+                    </div>
+                    <div class="ra-settings-body">
+                        <div class="ra-setting-group">
+                            <label class="ra-setting-label">API Key</label>
+                            <input type="password" id="ra-apikey" class="ra-setting-input" placeholder="输入 Anthropic API Key" oninput="saveReadingSettings()">
+                        </div>
+                        <div class="ra-setting-group">
+                            <label class="ra-setting-label">当前书名（告知角色）</label>
+                            <input type="text" id="ra-bookname-setting" class="ra-setting-input" placeholder="正在读的书名" oninput="saveReadingSettings()">
+                        </div>
+                        <div class="ra-setting-group">
+                            <label class="ra-setting-label">角色人设补充</label>
+                            <textarea id="ra-char-prompt" class="ra-setting-input" rows="3" placeholder="自定义角色的 system prompt 补充内容" oninput="saveReadingSettings()"></textarea>
+                        </div>
+                        <div class="ra-setting-group">
+                            <label class="ra-setting-label">字体大小</label>
+                            <div class="ra-setting-options" id="ra-fontsize-options">
+                                <button onclick="applyFontSize('small')" data-val="small">小</button>
+                                <button onclick="applyFontSize('medium')" data-val="medium" class="active">中</button>
+                                <button onclick="applyFontSize('large')" data-val="large">大</button>
+                            </div>
+                        </div>
+                        <div class="ra-setting-group">
+                            <label class="ra-setting-label">行距</label>
+                            <div class="ra-setting-options" id="ra-lineheight-options">
+                                <button onclick="applyLineHeight('compact')" data-val="compact">紧凑</button>
+                                <button onclick="applyLineHeight('normal')" data-val="normal" class="active">适中</button>
+                                <button onclick="applyLineHeight('loose')" data-val="loose">宽松</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
             </div>
         </div>
 
