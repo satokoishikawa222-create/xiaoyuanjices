@@ -39502,6 +39502,13 @@ document.addEventListener('click', (e) => {
     var raPendingParagraph = null;
     var raSelectedText = '';
     var raBookColors = ['#8b9dc3', '#a8b5a2', '#c4a882', '#c49b9b', '#9bb5c4', '#b5a2c4'];
+    var raCurrentChar = null; // 当前选中的角色 { id, name, avatar, prompt }
+    var raLatestAnnotationParaIdx = -1; // 最近一条批注的段落 index
+
+    // 恢复上次选中的角色
+    (function() {
+        try { raCurrentChar = JSON.parse(localStorage.getItem('ra_currentChar')); } catch(e) {}
+    })();
 
     // ===== 工具函数 =====
     function getBooks() {
@@ -39564,33 +39571,166 @@ document.addEventListener('click', (e) => {
     };
 
     // ===== 书架渲染 + 导入 =====
+    var raCurrentGroup = 'all';
+
+    window.switchBookGroup = function(group) {
+        raCurrentGroup = group;
+        var tabs = document.querySelectorAll('.ra-group-tab');
+        for (var i = 0; i < tabs.length; i++) {
+            tabs[i].classList.toggle('active', tabs[i].getAttribute('data-group') === group);
+        }
+        restoreBookshelf();
+    };
+
+    window.moveBookToGroup = function() {
+        closeBookCardMenu();
+        var idx = raBookMenuIndex;
+        var books = getBooks();
+        if (!books[idx]) return;
+        var groups = ['want', 'reading', 'done'];
+        var labels = ['想读', '在读', '读完'];
+        var current = books[idx].group || '';
+        var choice = prompt('选择分组 (输入数字):\n1. 想读\n2. 在读\n3. 读完');
+        if (!choice) return;
+        var gi = parseInt(choice) - 1;
+        if (gi >= 0 && gi < groups.length) {
+            books[idx].group = groups[gi];
+            saveBooks(books);
+            restoreBookshelf();
+        }
+    };
+
     function restoreBookshelf() {
         var grid = document.getElementById('bookshelf-grid');
         if (!grid) return;
         grid.innerHTML = '';
         var books = getBooks();
+        var s = getSettings();
+        var sortMode = s.sortMode || 'recent';
+
+        // 创建索引数组排序
+        var indices = [];
         for (var i = 0; i < books.length; i++) {
-            grid.appendChild(createBookCard(i, books[i]));
+            if (raCurrentGroup !== 'all' && (books[i].group || '') !== raCurrentGroup) continue;
+            indices.push(i);
+        }
+        var state = getReadingState();
+        if (sortMode === 'recent') {
+            indices.sort(function(a, b) {
+                var ta = (state['book_' + a] && state['book_' + a].lastTime) || 0;
+                var tb = (state['book_' + b] && state['book_' + b].lastTime) || 0;
+                return tb - ta;
+            });
+        } else if (sortMode === 'name') {
+            indices.sort(function(a, b) { return (books[a].name || '').localeCompare(books[b].name || ''); });
+        } else if (sortMode === 'progress') {
+            indices.sort(function(a, b) { return (books[b].progress || 0) - (books[a].progress || 0); });
+        }
+        for (var j = 0; j < indices.length; j++) {
+            grid.appendChild(createBookCard(indices[j], books[indices[j]]));
         }
         grid.appendChild(createAddCard());
+    }
+
+    window.toggleSortMenu = function() {
+        var menu = document.getElementById('ra-sort-menu');
+        if (menu) menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+    };
+
+    window.applySortMode = function(mode) {
+        var s = getSettings(); s.sortMode = mode; saveSettings(s);
+        var menu = document.getElementById('ra-sort-menu');
+        if (menu) menu.style.display = 'none';
+        restoreBookshelf();
+    };
+
+    // 书名 hash 取色（同一书名始终一致）
+    function hashColor(name) {
+        var h = 0;
+        for (var i = 0; i < name.length; i++) { h = name.charCodeAt(i) + ((h << 5) - h); }
+        var hue = Math.abs(h) % 360;
+        return 'hsl(' + hue + ', 35%, 60%)';
     }
 
     function createBookCard(index, book) {
         var card = document.createElement('div');
         card.className = 'ra-book-card';
-        var color = raBookColors[index % raBookColors.length];
         var progress = book.progress || 0;
+        var coverHtml;
+        if (book.coverImage) {
+            // 自定义封面（base64 或 URL）
+            coverHtml = '<div class="ra-book-cover" style="background:#000;"><img src="' + book.coverImage + '" style="width:100%;height:100%;object-fit:cover;"></div>';
+        } else {
+            // 默认封面：书名 hash 取色 + 书名
+            var color = hashColor(book.name || '');
+            coverHtml = '<div class="ra-book-cover" style="background:' + color + ';"><div class="ra-book-cover-name">' + escapeHtml(book.name) + '</div></div>';
+        }
         card.innerHTML =
-            '<div class="ra-book-cover" style="background:' + color + ';">' +
-                '<div class="ra-book-cover-name">' + escapeHtml(book.name) + '</div>' +
-            '</div>' +
+            coverHtml +
             '<div class="ra-book-info">' +
                 '<div class="ra-book-title">' + escapeHtml(book.name) + '</div>' +
                 '<div class="ra-book-progress-bar"><div class="ra-book-progress-fill" style="width:' + progress + '%;"></div></div>' +
             '</div>';
         card.onclick = function() { openReadingPage(index); };
+        // 长按弹出操作菜单
+        var longTimer = null;
+        card.addEventListener('touchstart', function(e) {
+            longTimer = setTimeout(function() { showBookCardMenu(index); }, 600);
+        }, { passive: true });
+        card.addEventListener('touchend', function() { clearTimeout(longTimer); });
+        card.addEventListener('touchmove', function() { clearTimeout(longTimer); });
         return card;
     }
+
+    var raBookMenuIndex = -1;
+    function showBookCardMenu(index) {
+        raBookMenuIndex = index;
+        var menu = document.getElementById('ra-bookcard-menu');
+        if (menu) menu.style.display = 'block';
+    }
+
+    window.closeBookCardMenu = function() {
+        var menu = document.getElementById('ra-bookcard-menu');
+        if (menu) menu.style.display = 'none';
+    };
+
+    window.changeCoverImage = function() {
+        closeBookCardMenu();
+        var idx = raBookMenuIndex;
+        // 弹出选择方式
+        var method = prompt('输入封面图片URL，或留空选择本地上传：');
+        if (method === null) return;
+        if (method.trim()) {
+            // URL
+            var books = getBooks();
+            if (books[idx]) { books[idx].coverImage = method.trim(); saveBooks(books); restoreBookshelf(); }
+        } else {
+            // 本地上传
+            var input = document.createElement('input');
+            input.type = 'file';
+            input.accept = 'image/*';
+            input.onchange = function(e) {
+                var file = e.target.files[0];
+                if (!file) return;
+                var reader = new FileReader();
+                reader.onload = function(ev) {
+                    var books = getBooks();
+                    if (books[idx]) { books[idx].coverImage = ev.target.result; saveBooks(books); restoreBookshelf(); }
+                };
+                reader.readAsDataURL(file);
+            };
+            input.click();
+        }
+    };
+
+    window.deleteBook = function() {
+        closeBookCardMenu();
+        if (!confirm('确定要删除这本书吗？')) return;
+        var books = getBooks();
+        books.splice(raBookMenuIndex, 1);
+        saveBooks(books);
+        restoreBookshelf();
+    };
 
     function createAddCard() {
         var card = document.createElement('div');
@@ -39659,11 +39799,21 @@ document.addEventListener('click', (e) => {
         restoreAnnotationsForBook(index);
         applySettings();
 
+        // 恢复阅读进度（精确到段落）
         var state = getReadingState();
         var body = document.getElementById('reading-body');
         if (state['book_' + index] && body) {
             setTimeout(function() {
-                body.scrollTop = (state['book_' + index].scrollPercent || 0) * body.scrollHeight;
+                var st = state['book_' + index];
+                if (st.paragraphIndex >= 0) {
+                    var contentEl = document.getElementById('reading-content');
+                    var p = contentEl ? contentEl.querySelector('[data-para-index="' + st.paragraphIndex + '"]') : null;
+                    if (p) {
+                        body.scrollTop = p.offsetTop + (st.scrollOffset || 0);
+                        return;
+                    }
+                }
+                body.scrollTop = (st.scrollPercent || 0) * body.scrollHeight;
             }, 100);
         }
 
@@ -39676,6 +39826,8 @@ document.addEventListener('click', (e) => {
 
         initTapZone();
         initLongPress();
+        updateReadingAvatar();
+        initTopBarAutoHide();
     }
 
     window.closeReadingPage = function() {
@@ -39696,12 +39848,34 @@ document.addEventListener('click', (e) => {
         var elapsed = (Date.now() - raReadingStartTime) / 1000;
         var prev = (state['book_' + raCurrentBook] && state['book_' + raCurrentBook].duration) || 0;
         var scrollPercent = body.scrollHeight > 0 ? body.scrollTop / body.scrollHeight : 0;
+        // 精确段落级别记忆
+        var paraIdx = findVisibleParagraphIndex();
+        var scrollOffset = 0;
+        if (paraIdx >= 0) {
+            var contentEl = document.getElementById('reading-content');
+            var p = contentEl ? contentEl.querySelector('[data-para-index="' + paraIdx + '"]') : null;
+            if (p) scrollOffset = body.scrollTop - p.offsetTop;
+        }
         state['book_' + raCurrentBook] = {
             scrollPercent: scrollPercent,
+            paragraphIndex: paraIdx,
+            scrollOffset: scrollOffset,
             duration: prev + elapsed,
             lastTime: Date.now()
         };
         saveReadingState(state);
+    }
+
+    function findVisibleParagraphIndex() {
+        var body = document.getElementById('reading-body');
+        var contentEl = document.getElementById('reading-content');
+        if (!body || !contentEl) return -1;
+        var ps = contentEl.querySelectorAll('p[data-para-index]');
+        var scrollTop = body.scrollTop + 80; // 考虑顶栏
+        for (var i = ps.length - 1; i >= 0; i--) {
+            if (ps[i].offsetTop <= scrollTop) return parseInt(ps[i].getAttribute('data-para-index'));
+        }
+        return 0;
     }
 
     function autoSaveReadingState(prevDuration) {
@@ -39732,6 +39906,27 @@ document.addEventListener('click', (e) => {
     }
 
     // ===== 菜单栏逻辑 =====
+    // ===== 顶部栏自动隐藏 (Step 19) =====
+    function initTopBarAutoHide() {
+        var body = document.getElementById('reading-body');
+        var topbar = document.getElementById('reading-topbar');
+        if (!body || !topbar) return;
+        var lastScroll = 0;
+        var hideTimer = null;
+        topbar.style.transition = 'transform 0.3s ease';
+        body.addEventListener('scroll', function() {
+            var curScroll = body.scrollTop;
+            if (raMenuVisible) {
+                topbar.style.transform = 'translateY(0)';
+            } else if (curScroll > lastScroll && curScroll > 100) {
+                topbar.style.transform = 'translateY(-100%)';
+            } else {
+                topbar.style.transform = 'translateY(0)';
+            }
+            lastScroll = curScroll;
+        }, { passive: true });
+    }
+
     function initTapZone() {
         var tapZone = document.getElementById('reading-tap-zone');
         if (tapZone) {
@@ -39882,17 +40077,29 @@ document.addEventListener('click', (e) => {
         }
     };
 
-    // ===== 笔记功能 =====
+    // ===== 笔记功能 (Step 16: Selection API 增强) =====
     function initLongPress() {
         var contentEl = document.getElementById('reading-content');
         if (!contentEl) return;
         var timer = null;
+        var touchTarget = null;
         contentEl.addEventListener('touchstart', function(e) {
-            var target = e.target;
-            if (target.tagName !== 'P') return;
+            touchTarget = e.target;
+            // 只在 p 或 p 内的子元素上触发
+            var p = touchTarget.closest ? touchTarget.closest('p') : null;
+            if (!p && touchTarget.tagName === 'P') p = touchTarget;
+            if (!p) return;
             timer = setTimeout(function() {
-                raPendingParagraph = target;
-                raSelectedText = target.textContent.substring(0, 100);
+                raPendingParagraph = p;
+                // 尝试用 Selection API 获取选中文字
+                var sel = window.getSelection();
+                if (sel && sel.toString().trim().length > 0) {
+                    raSelectedText = sel.toString().substring(0, 200);
+                    raSelectionRange = sel.rangeCount > 0 ? sel.getRangeAt(0).cloneRange() : null;
+                } else {
+                    raSelectedText = p.textContent.substring(0, 100);
+                    raSelectionRange = null;
+                }
                 showParagraphMenu();
             }, 600);
         }, { passive: true });
@@ -39900,23 +40107,61 @@ document.addEventListener('click', (e) => {
         contentEl.addEventListener('touchmove', function() { clearTimeout(timer); });
     }
 
+    var raSelectionRange = null; // 保存用户选区 Range
+
     function showParagraphMenu() {
         var menu = document.getElementById('paragraph-action-menu');
-        if (menu) menu.style.display = 'block';
+        if (!menu) return;
+        menu.style.display = 'block';
+        // 菜单跟随选区位置
+        var sel = window.getSelection();
+        if (sel && sel.rangeCount > 0) {
+            var rect = sel.getRangeAt(0).getBoundingClientRect();
+            if (rect.top > 0) {
+                menu.style.position = 'fixed';
+                menu.style.top = Math.max(10, rect.top - menu.offsetHeight - 10) + 'px';
+                menu.style.left = Math.max(10, Math.min(window.innerWidth - 200, rect.left + rect.width / 2 - 90)) + 'px';
+                menu.style.transform = 'none';
+                return;
+            }
+        }
+        // fallback: 居中
+        menu.style.position = 'fixed';
+        menu.style.top = '50%';
+        menu.style.left = '50%';
+        menu.style.transform = 'translate(-50%,-50%)';
     }
 
     window.closeParagraphMenu = function() {
         var menu = document.getElementById('paragraph-action-menu');
-        if (menu) menu.style.display = 'none';
+        if (menu) { menu.style.display = 'none'; menu.style.transform = ''; }
         raPendingParagraph = null;
+    };
+
+    var raCurrentMarkStyle = 'highlight-yellow'; // 默认标记样式
+    var raClickedMark = null; // 点击的已标记元素
+
+    window.selectMarkStyle = function(el) {
+        var btns = el.parentNode.querySelectorAll('.ra-mark-color-btn, .ra-mark-type-btn');
+        // 只在同一行内切换
+        var allBtns = el.closest('.ra-note-input-box').querySelectorAll('.ra-mark-color-btn, .ra-mark-type-btn');
+        for (var i = 0; i < allBtns.length; i++) allBtns[i].classList.remove('active');
+        el.classList.add('active');
+        raCurrentMarkStyle = el.getAttribute('data-mark');
     };
 
     window.startAddNote = function() {
         closeParagraphMenu();
+        raCurrentMarkStyle = 'highlight-yellow';
         var modal = document.getElementById('note-input-modal');
         var textEl = document.getElementById('note-selected-text');
         if (textEl) textEl.textContent = raSelectedText;
         if (modal) modal.style.display = 'flex';
+        // 重置标记选择
+        var allBtns = modal.querySelectorAll('.ra-mark-color-btn, .ra-mark-type-btn');
+        for (var i = 0; i < allBtns.length; i++) allBtns[i].classList.remove('active');
+        var def = modal.querySelector('[data-mark="highlight-yellow"]');
+        if (def) def.classList.add('active');
         var ta = document.getElementById('note-input-textarea');
         if (ta) { ta.value = ''; ta.focus(); }
     };
@@ -39928,21 +40173,115 @@ document.addEventListener('click', (e) => {
 
     window.saveCurrentNote = function() {
         var ta = document.getElementById('note-input-textarea');
-        if (!ta || !ta.value.trim() || !raPendingParagraph) { closeNoteInput(); return; }
+        if (!raPendingParagraph) { closeNoteInput(); return; }
         var paraIdx = parseInt(raPendingParagraph.getAttribute('data-para-index'));
         var chapter = findChapterForPara(paraIdx);
-        var notes = getNotes();
-        notes.push({
+
+        // 确定 startOffset 和 endOffset
+        var startOffset = 0, endOffset = raSelectedText.length;
+        if (raSelectionRange) {
+            try {
+                startOffset = raSelectionRange.startOffset;
+                endOffset = raSelectionRange.endOffset;
+            } catch(e) {}
+        }
+
+        var noteData = {
             bookIndex: raCurrentBook,
             chapter: chapter,
             paraIndex: paraIdx,
+            startOffset: startOffset,
+            endOffset: endOffset,
             selectedText: raSelectedText,
-            note: ta.value.trim(),
+            markType: raCurrentMarkStyle,
+            note: ta ? ta.value.trim() : '',
             time: new Date().toLocaleString()
-        });
+        };
+
+        var notes = getNotes();
+        notes.push(noteData);
         saveNotes(notes);
+
+        // 应用标记到文本
+        applyMarkToContent(noteData);
         raPendingParagraph.classList.add('ra-has-note');
         closeNoteInput();
+    };
+
+    function applyMarkToContent(noteData) {
+        var contentEl = document.getElementById('reading-content');
+        if (!contentEl) return;
+        var p = contentEl.querySelector('[data-para-index="' + noteData.paraIndex + '"]');
+        if (!p) return;
+        // 尝试用 Range 包裹选中文字
+        try {
+            if (raSelectionRange && p.contains(raSelectionRange.startContainer)) {
+                var mark = document.createElement('mark');
+                mark.className = 'ra-mark-' + noteData.markType;
+                mark.setAttribute('data-note-idx', getNotes().length - 1);
+                raSelectionRange.surroundContents(mark);
+                initMarkClick(mark);
+                return;
+            }
+        } catch(e) {}
+        // fallback: 在段落文本中查找并包裹
+        wrapTextInPara(p, noteData.selectedText, noteData.markType, getNotes().length - 1);
+    }
+
+    function wrapTextInPara(p, text, markType, noteIdx) {
+        var html = p.innerHTML;
+        var idx = html.indexOf(escapeHtml(text));
+        if (idx === -1) return;
+        var before = html.substring(0, idx);
+        var matched = html.substring(idx, idx + escapeHtml(text).length);
+        var after = html.substring(idx + escapeHtml(text).length);
+        p.innerHTML = before + '<mark class="ra-mark-' + markType + '" data-note-idx="' + noteIdx + '">' + matched + '</mark>' + after;
+        var mark = p.querySelector('mark[data-note-idx="' + noteIdx + '"]');
+        if (mark) initMarkClick(mark);
+    }
+
+    function initMarkClick(mark) {
+        mark.addEventListener('click', function(e) {
+            e.stopPropagation();
+            raClickedMark = mark;
+            var menu = document.getElementById('ra-mark-click-menu');
+            if (!menu) return;
+            var rect = mark.getBoundingClientRect();
+            menu.style.display = 'block';
+            menu.style.top = Math.max(10, rect.bottom + 6) + 'px';
+            menu.style.left = Math.max(10, Math.min(window.innerWidth - 160, rect.left)) + 'px';
+        });
+    }
+
+    window.closeMarkClickMenu = function() {
+        var menu = document.getElementById('ra-mark-click-menu');
+        if (menu) menu.style.display = 'none';
+        raClickedMark = null;
+    };
+
+    window.viewMarkNote = function() {
+        if (!raClickedMark) { closeMarkClickMenu(); return; }
+        var idx = parseInt(raClickedMark.getAttribute('data-note-idx'));
+        var notes = getNotes();
+        var note = notes[idx];
+        closeMarkClickMenu();
+        if (note && note.note) {
+            alert(note.note);
+        }
+    };
+
+    window.deleteCurrentMark = function() {
+        if (!raClickedMark) { closeMarkClickMenu(); return; }
+        var idx = parseInt(raClickedMark.getAttribute('data-note-idx'));
+        // 解包标记
+        var parent = raClickedMark.parentNode;
+        while (raClickedMark.firstChild) { parent.insertBefore(raClickedMark.firstChild, raClickedMark); }
+        parent.removeChild(raClickedMark);
+        // 删除笔记数据
+        var notes = getNotes();
+        if (notes[idx]) { notes.splice(idx, 1); saveNotes(notes); }
+        closeMarkClickMenu();
+    };
     };
 
     function findChapterForPara(paraIdx) {
@@ -39958,8 +40297,13 @@ document.addEventListener('click', (e) => {
         var contentEl = document.getElementById('reading-content');
         if (!contentEl) return;
         for (var i = 0; i < notes.length; i++) {
-            var p = contentEl.querySelector('[data-para-index="' + notes[i].paraIndex + '"]');
-            if (p) p.classList.add('ra-has-note');
+            var note = notes[i];
+            var p = contentEl.querySelector('[data-para-index="' + note.paraIndex + '"]');
+            if (!p) continue;
+            p.classList.add('ra-has-note');
+            if (note.markType && note.selectedText) {
+                wrapTextInPara(p, note.selectedText, note.markType, i);
+            }
         }
     }
 
@@ -39975,26 +40319,42 @@ document.addEventListener('click', (e) => {
         if (notes.length === 0) {
             list.innerHTML = '<div style="padding:40px 20px;text-align:center;color:#999;font-size:14px;">暂无笔记</div>';
         } else {
+            var markColorMap = {
+                'highlight-yellow':'rgba(255,235,59,0.6)', 'highlight-green':'rgba(129,199,132,0.6)',
+                'highlight-pink':'rgba(244,143,177,0.6)', 'highlight-blue':'rgba(100,181,246,0.6)',
+                'underline-solid':'#bf9e6a', 'underline-dashed':'#bf9e6a', 'underline-wavy':'#bf9e6a',
+                'strikethrough':'#e57373', 'box':'#bf9e6a'
+            };
             for (var i = 0; i < notes.length; i++) {
-                (function(note) {
+                (function(note, idx) {
                     var item = document.createElement('div');
                     item.className = 'ra-note-item';
+                    var colorDot = note.markType ? '<span class="ra-note-color-dot" style="background:' + (markColorMap[note.markType] || '#DDD') + ';"></span>' : '';
+                    var excerptClass = note.markType ? ' ra-mark-' + note.markType : '';
                     item.innerHTML =
-                        '<div class="ra-note-chapter">' + escapeHtml(note.chapter) + '</div>' +
-                        '<div class="ra-note-excerpt">"' + escapeHtml(note.selectedText) + '"</div>' +
-                        '<div class="ra-note-content">' + escapeHtml(note.note) + '</div>' +
-                        '<div class="ra-note-time">' + escapeHtml(note.time) + '</div>';
+                        '<div class="ra-note-chapter">' + colorDot + escapeHtml(note.chapter || '') + '</div>' +
+                        '<div class="ra-note-excerpt"><span class="' + excerptClass + '">"' + escapeHtml(note.selectedText || '') + '"</span></div>' +
+                        '<div class="ra-note-content">' + escapeHtml(note.note || '') + '</div>' +
+                        '<div class="ra-note-time">' + escapeHtml(note.time || '') + '</div>';
                     item.onclick = function() {
                         closeNotesPanel();
                         var body = document.getElementById('reading-body');
                         var contentEl = document.getElementById('reading-content');
                         if (body && contentEl) {
                             var p = contentEl.querySelector('[data-para-index="' + note.paraIndex + '"]');
-                            if (p) body.scrollTop = p.offsetTop - 60;
+                            if (p) {
+                                body.scrollTop = p.offsetTop - 60;
+                                // 闪烁高亮
+                                var mark = p.querySelector('mark[data-note-idx="' + idx + '"]');
+                                if (mark) {
+                                    mark.classList.add('ra-mark-flash');
+                                    setTimeout(function() { mark.classList.remove('ra-mark-flash'); }, 1500);
+                                }
+                            }
                         }
                     };
                     list.appendChild(item);
-                })(notes[i]);
+                })(notes[i], i);
             }
         }
         panel.classList.add('show');
@@ -40014,6 +40374,21 @@ document.addEventListener('click', (e) => {
         var s = getSettings();
         s.nightMode = isNight;
         saveSettings(s);
+        // JS 直接设置背景色，不依赖 CSS class 覆盖
+        var body = document.getElementById('reading-body');
+        var page = document.getElementById('reading-page');
+        var contentEl = document.getElementById('reading-content');
+        if (isNight) {
+            if (body) body.style.background = '#1a1814';
+            if (page) page.style.background = '#1a1814';
+            if (contentEl) contentEl.style.color = '#c8b99a';
+        } else {
+            var bgColor = s.bgColor || '#F9F8F5';
+            var textColor = s.textColor || '#333';
+            if (body) body.style.background = bgColor;
+            if (page) page.style.background = bgColor;
+            if (contentEl) contentEl.style.color = textColor;
+        }
         var btn = document.getElementById('night-mode-btn');
         if (btn) {
             var span = btn.querySelector('span');
@@ -40026,10 +40401,134 @@ document.addEventListener('click', (e) => {
         if (s.nightMode) { document.body.classList.add('night-mode'); }
     })();
 
-    // ===== 批注功能 =====
+    // ===== 批注功能 (Step 14 完整版) =====
+
+    // 更新顶部角色头像显示
+    function updateReadingAvatar() {
+        var el = document.getElementById('reading-avatar');
+        if (!el) return;
+        if (raCurrentChar && raCurrentChar.avatar) {
+            el.innerHTML = '<img src="' + raCurrentChar.avatar + '" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">';
+        } else if (raCurrentChar && raCurrentChar.name) {
+            el.innerHTML = '<span style="font-size:13px;color:#666;">' + escapeHtml(raCurrentChar.name.charAt(0)) + '</span>';
+        } else {
+            el.innerHTML = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke="#999" stroke-width="1.5"/><path d="M4 20c0-3.3 3.6-6 8-6s8 2.7 8 6" stroke="#999" stroke-width="1.5" stroke-linecap="round"/></svg>';
+        }
+        el.onclick = function() { openCharPicker(); };
+    }
+
+    // 打开角色选择面板
+    window.openCharPicker = function() {
+        var panel = document.getElementById('char-picker');
+        var overlay = document.getElementById('char-picker-overlay');
+        var list = document.getElementById('char-picker-list');
+        if (!panel || !list) return;
+
+        list.innerHTML = '';
+        var chars = (typeof wcState !== 'undefined' && Array.isArray(wcState.characters))
+            ? wcState.characters.filter(function(c) { return !c.isGroup; })
+            : [];
+
+        if (chars.length === 0) {
+            list.innerHTML = '<div style="padding:40px 20px;text-align:center;color:#999;font-size:14px;">通讯录里还没有角色</div>';
+        } else {
+            for (var i = 0; i < chars.length; i++) {
+                (function(ch) {
+                    var item = document.createElement('div');
+                    item.className = 'ra-char-item' + (raCurrentChar && raCurrentChar.id === ch.id ? ' selected' : '');
+                    var avatarHtml = ch.avatar
+                        ? '<img src="' + ch.avatar + '">'
+                        : escapeHtml(ch.name ? ch.name.charAt(0) : '?');
+                    var checkHtml = (raCurrentChar && raCurrentChar.id === ch.id)
+                        ? '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8l4 4 6-7" stroke="#bf9e6a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+                        : '';
+                    item.innerHTML =
+                        '<div class="ra-char-avatar-circle">' + avatarHtml + '</div>' +
+                        '<div class="ra-char-name">' + escapeHtml(ch.name || '未命名') + '</div>' +
+                        '<div class="ra-char-check">' + checkHtml + '</div>';
+                    item.onclick = function() {
+                        raCurrentChar = { id: ch.id, name: ch.name, avatar: ch.avatar || '', prompt: ch.prompt || '' };
+                        localStorage.setItem('ra_currentChar', JSON.stringify(raCurrentChar));
+                        updateReadingAvatar();
+                        closeCharPicker();
+                    };
+                    list.appendChild(item);
+                })(chars[i]);
+            }
+        }
+        panel.classList.add('show');
+        if (overlay) overlay.classList.add('show');
+    };
+
+    window.closeCharPicker = function() {
+        var panel = document.getElementById('char-picker');
+        var overlay = document.getElementById('char-picker-overlay');
+        if (panel) panel.classList.remove('show');
+        if (overlay) overlay.classList.remove('show');
+    };
+
+    // 批注提示条
+    function showAnnotationToast(charName, paraIdx) {
+        raLatestAnnotationParaIdx = paraIdx;
+        var toast = document.getElementById('annotation-toast');
+        var textEl = document.getElementById('annotation-toast-text');
+        if (!toast || !textEl) return;
+        textEl.textContent = charName + ' 有新批注 →';
+        toast.classList.add('show');
+        setTimeout(function() { toast.classList.remove('show'); }, 3000);
+    }
+
+    window.scrollToLatestAnnotation = function() {
+        var toast = document.getElementById('annotation-toast');
+        if (toast) toast.classList.remove('show');
+        if (raLatestAnnotationParaIdx < 0) return;
+        var body = document.getElementById('reading-body');
+        var contentEl = document.getElementById('reading-content');
+        if (!body || !contentEl) return;
+        var p = contentEl.querySelector('[data-para-index="' + raLatestAnnotationParaIdx + '"]');
+        if (p) body.scrollTop = p.offsetTop - 60;
+    };
+
+    // 构建批注气泡
+    function buildAnnotationBubble(charName, charAvatar, content, isLoading, annotationIdx) {
+        var bubble = document.createElement('div');
+        bubble.className = 'char-annotation';
+        var avatarHtml = charAvatar
+            ? '<img src="' + charAvatar + '">'
+            : '<span style="font-size:10px;color:#999;">' + escapeHtml((charName || '?').charAt(0)) + '</span>';
+        if (isLoading) {
+            bubble.innerHTML =
+                '<div class="char-annotation-header"><div class="char-annotation-avatar">' + avatarHtml + '</div><div class="char-annotation-name">' + escapeHtml(charName || '角色') + '</div></div>' +
+                '<div class="char-annotation-loading">思考中...</div>';
+        } else {
+            var repliesHtml = '';
+            if (typeof annotationIdx === 'number' && annotationIdx >= 0) {
+                var annotations = getAnnotations();
+                var ann = annotations[annotationIdx];
+                if (ann && ann.replies && ann.replies.length > 0) {
+                    for (var r = 0; r < ann.replies.length; r++) {
+                        repliesHtml += '<div style="margin-top:8px;padding-left:12px;border-left:2px solid #E0E0E0;font-size:12px;color:#888;">' + escapeHtml(ann.replies[r].content) + '</div>';
+                    }
+                }
+            }
+            var replyBtn = typeof annotationIdx === 'number' ? '<div style="margin-top:6px;text-align:right;"><button onclick="replyToAnnotation(' + annotationIdx + ',this)" style="border:none;background:none;color:#bf9e6a;font-size:12px;cursor:pointer;">回复</button></div>' : '';
+            bubble.innerHTML =
+                '<div class="char-annotation-header"><div class="char-annotation-avatar">' + avatarHtml + '</div><div class="char-annotation-name">' + escapeHtml(charName || '角色') + '</div></div>' +
+                '<div>' + escapeHtml(content) + '</div>' +
+                repliesHtml + replyBtn;
+        }
+        if (typeof annotationIdx === 'number') bubble.setAttribute('data-ann-idx', annotationIdx);
+        return bubble;
+    }
+
     window.letCharSee = function() {
         closeParagraphMenu();
         if (!raPendingParagraph) return;
+
+        if (!raCurrentChar || !raCurrentChar.name) {
+            openCharPicker();
+            return;
+        }
 
         var paraIdx = parseInt(raPendingParagraph.getAttribute('data-para-index'));
         var text = raPendingParagraph.textContent;
@@ -40037,24 +40536,38 @@ document.addEventListener('click', (e) => {
         var apiKey = settings.apiKey;
         if (!apiKey) { alert('请先在设置中填写 API Key'); return; }
 
-        var bubble = document.createElement('div');
-        bubble.className = 'char-annotation';
-        bubble.innerHTML = '<div class="char-annotation-name">角色批注</div><div class="char-annotation-loading">思考中...</div>';
+        var bubble = buildAnnotationBubble(raCurrentChar.name, raCurrentChar.avatar, '', true);
         raPendingParagraph.parentNode.insertBefore(bubble, raPendingParagraph.nextSibling);
 
-        var bookName = settings.bookName || '一本书';
-        var charPrompt = settings.charPrompt || '';
-        var systemPrompt = '你是一位正在和朋友一起读《' + bookName + '》的读者。你们有着默契的阅读品味，你会对文中的段落给出真实、简短、带有个人风格的点评。' +
-            (charPrompt ? '\n补充设定：' + charPrompt : '') +
-            '\n请用简短的1-3句话点评以下段落，像朋友之间的随意聊天，不要太正式。';
+        var books = getBooks();
+        var bookName = (books[raCurrentBook] && books[raCurrentBook].name) || settings.bookName || '一本书';
+        var charPersona = raCurrentChar.prompt || '';
+        var sysPrompt = charPersona +
+            '\n你现在正在和用户一起读《' + bookName + '》，用户把正在读的段落分享给你，请以同读者的视角自然回应，像朋友间随口说的反应，不要分析，不要总结，可以有情绪、可以提问、可以猜后续，回应简短即可。';
 
-        callAnthropicAPI(apiKey, systemPrompt, text, function(reply) {
-            bubble.innerHTML = '<div class="char-annotation-name">角色批注</div><div>' + escapeHtml(reply) + '</div>';
+        var charName = raCurrentChar.name;
+        var charAvatar = raCurrentChar.avatar;
+
+        callAnthropicAPI(apiKey, sysPrompt, text, function(reply) {
+            if (bubble.parentNode) bubble.parentNode.removeChild(bubble);
+            var finalBubble = buildAnnotationBubble(charName, charAvatar, reply, false);
+            var contentEl = document.getElementById('reading-content');
+            if (contentEl) {
+                var p = contentEl.querySelector('[data-para-index="' + paraIdx + '"]');
+                if (p) p.parentNode.insertBefore(finalBubble, p.nextSibling);
+            }
             var annotations = getAnnotations();
-            annotations.push({ bookIndex: raCurrentBook, paraIndex: paraIdx, text: reply, time: new Date().toLocaleString() });
+            annotations.push({
+                bookIndex: raCurrentBook, paraIndex: paraIdx,
+                charName: charName, charAvatar: charAvatar,
+                content: reply, time: new Date().toLocaleString()
+            });
             saveAnnotations(annotations);
+            showAnnotationToast(charName, paraIdx);
         }, function(err) {
-            bubble.innerHTML = '<div class="char-annotation-name">角色批注</div><div style="color:#c44;">请求失败: ' + escapeHtml(err) + '</div>';
+            bubble.innerHTML =
+                '<div class="char-annotation-header"><div class="char-annotation-avatar"></div><div class="char-annotation-name">' + escapeHtml(charName) + '</div></div>' +
+                '<div style="color:#c44;">请求失败: ' + escapeHtml(err) + '</div>';
         });
     };
 
@@ -40088,22 +40601,65 @@ document.addEventListener('click', (e) => {
     }
 
     function restoreAnnotationsForBook(bookIndex) {
-        var annotations = getAnnotations().filter(function(a) { return a.bookIndex === bookIndex; });
+        var allAnnotations = getAnnotations();
         var contentEl = document.getElementById('reading-content');
         if (!contentEl) return;
-        for (var i = 0; i < annotations.length; i++) {
-            var a = annotations[i];
+        for (var i = 0; i < allAnnotations.length; i++) {
+            var a = allAnnotations[i];
+            if (a.bookIndex !== bookIndex) continue;
             var p = contentEl.querySelector('[data-para-index="' + a.paraIndex + '"]');
             if (p) {
-                var bubble = document.createElement('div');
-                bubble.className = 'char-annotation';
-                bubble.innerHTML = '<div class="char-annotation-name">角色批注</div><div>' + escapeHtml(a.text) + '</div>';
+                var bubble = buildAnnotationBubble(a.charName || '角色', a.charAvatar || '', a.content || a.text || '', false, i);
                 p.parentNode.insertBefore(bubble, p.nextSibling);
             }
         }
     }
 
-    // ===== 设置面板 =====
+    // 回复批注 (Step 22)
+    window.replyToAnnotation = function(annIdx, btn) {
+        var annotations = getAnnotations();
+        var ann = annotations[annIdx];
+        if (!ann) return;
+        var settings = getSettings();
+        var apiKey = settings.apiKey;
+        if (!apiKey) { alert('请先在设置中填写 API Key'); return; }
+
+        var replyText = prompt('输入你的回复:');
+        if (!replyText || !replyText.trim()) return;
+
+        var contentEl = document.getElementById('reading-content');
+        var p = contentEl ? contentEl.querySelector('[data-para-index="' + ann.paraIndex + '"]') : null;
+        var originalText = p ? p.textContent : '';
+
+        var charPersona = '';
+        if (raCurrentChar && raCurrentChar.prompt) charPersona = raCurrentChar.prompt;
+        var books = getBooks();
+        var bookName = (books[raCurrentBook] && books[raCurrentBook].name) || '一本书';
+
+        var sysPrompt = charPersona + '\n你现在正在和用户一起读《' + bookName + '》。';
+        var userMsg = '原文段落：' + originalText + '\n\n你之前的批注：' + ann.content + '\n\n用户回复你说：' + replyText.trim() + '\n\n请继续以你的角色自然回应，简短即可。';
+
+        var bubble = btn.closest('.char-annotation');
+        var loadingDiv = document.createElement('div');
+        loadingDiv.style.cssText = 'margin-top:8px;padding-left:12px;border-left:2px solid #E0E0E0;font-size:12px;color:#bbb;font-style:italic;';
+        loadingDiv.textContent = '思考中...';
+        bubble.appendChild(loadingDiv);
+
+        callAnthropicAPI(apiKey, sysPrompt, userMsg, function(reply) {
+            loadingDiv.style.color = '#888';
+            loadingDiv.style.fontStyle = 'normal';
+            loadingDiv.textContent = reply;
+            if (!ann.replies) ann.replies = [];
+            ann.replies.push({ content: reply, time: new Date().toLocaleString() });
+            annotations[annIdx] = ann;
+            saveAnnotations(annotations);
+        }, function(err) {
+            loadingDiv.textContent = '回复失败: ' + err;
+            loadingDiv.style.color = '#c44';
+        });
+    };
+
+    // ===== 设置面板 (Step 15 完整版) =====
     window.openSettingsPanel = function() {
         hideReadingMenu();
         var panel = document.getElementById('reading-settings-panel');
@@ -40113,13 +40669,44 @@ document.addEventListener('click', (e) => {
 
         var s = getSettings();
         var apiInput = document.getElementById('ra-apikey');
-        var bnInput = document.getElementById('ra-bookname-setting');
-        var cpInput = document.getElementById('ra-char-prompt');
         if (apiInput) apiInput.value = s.apiKey || '';
-        if (bnInput) bnInput.value = s.bookName || '';
-        if (cpInput) cpInput.value = s.charPrompt || '';
+
         highlightOption('ra-fontsize-options', s.fontSize || 'medium');
         highlightOption('ra-lineheight-options', s.lineHeight || 'normal');
+        highlightOption('ra-paddingx-options', s.paddingX || 'medium');
+        highlightOption('ra-paraspacing-options', s.paraSpacing || 'normal');
+        highlightOption('ra-pagemode-options', s.pageMode || 'scroll');
+        highlightOption('ra-annstyle-options', s.annotationStyle || 'line');
+        highlightOption('ra-tts-speed-options', String(s.ttsSpeed || 1));
+
+        var fontSelect = document.getElementById('ra-fontfamily-select');
+        if (fontSelect) fontSelect.value = s.fontFamily || 'sans';
+        var annFontSelect = document.getElementById('ra-annfont-select');
+        if (annFontSelect) annFontSelect.value = s.annotationFont || 'inherit';
+
+        var ttsEnabled = document.getElementById('ra-tts-enabled');
+        if (ttsEnabled) ttsEnabled.checked = !!s.ttsEnabled;
+        var ttsSource = document.getElementById('ra-tts-source');
+        if (ttsSource) { ttsSource.value = s.ttsSource || 'system'; onTtsSourceChange(); }
+
+        var mmKey = document.getElementById('ra-tts-minimax-key');
+        var mmGroup = document.getElementById('ra-tts-minimax-group');
+        var customUrl = document.getElementById('ra-tts-custom-url');
+        if (mmKey) mmKey.value = s.ttsKey || '';
+        if (mmGroup) mmGroup.value = s.ttsGroupId || '';
+        if (customUrl) customUrl.value = s.ttsUrl || '';
+
+        var bgPicker = document.getElementById('ra-bgcolor-picker');
+        if (bgPicker) bgPicker.value = s.bgColor || '#faf8f5';
+        var textPicker = document.getElementById('ra-textcolor-picker');
+        if (textPicker) textPicker.value = s.textColor || '#333333';
+        var annBg = document.getElementById('ra-ann-bgcolor');
+        if (annBg) annBg.value = s.annotationBgColor || '#FBF9F4';
+        var annTc = document.getElementById('ra-ann-textcolor');
+        if (annTc) annTc.value = s.annotationTextColor || '#666666';
+
+        renderSavedBgColors();
+        loadCustomFontsToSelect();
     };
 
     window.closeSettingsPanel = function() {
@@ -40132,37 +40719,305 @@ document.addEventListener('click', (e) => {
     window.saveReadingSettings = function() {
         var s = getSettings();
         var apiInput = document.getElementById('ra-apikey');
-        var bnInput = document.getElementById('ra-bookname-setting');
-        var cpInput = document.getElementById('ra-char-prompt');
         if (apiInput) s.apiKey = apiInput.value;
-        if (bnInput) s.bookName = bnInput.value;
-        if (cpInput) s.charPrompt = cpInput.value;
+        var ttsEnabled = document.getElementById('ra-tts-enabled');
+        if (ttsEnabled) s.ttsEnabled = ttsEnabled.checked;
+        var ttsSource = document.getElementById('ra-tts-source');
+        if (ttsSource) s.ttsSource = ttsSource.value;
+        var mmKey = document.getElementById('ra-tts-minimax-key');
+        if (mmKey) s.ttsKey = mmKey.value;
+        var mmGroup = document.getElementById('ra-tts-minimax-group');
+        if (mmGroup) s.ttsGroupId = mmGroup.value;
+        var customUrl = document.getElementById('ra-tts-custom-url');
+        if (customUrl) s.ttsUrl = customUrl.value;
         saveSettings(s);
+    };
+
+    window.onTtsSourceChange = function() {
+        var src = document.getElementById('ra-tts-source');
+        if (!src) return;
+        var v = src.value;
+        var mm = document.getElementById('ra-tts-minimax-fields');
+        var cu = document.getElementById('ra-tts-custom-fields');
+        if (mm) mm.style.display = v === 'minimax' ? 'block' : 'none';
+        if (cu) cu.style.display = v === 'custom' ? 'block' : 'none';
+        saveReadingSettings();
     };
 
     window.applyFontSize = function(size) {
-        var s = getSettings();
-        s.fontSize = size;
-        saveSettings(s);
+        var s = getSettings(); s.fontSize = size; saveSettings(s);
         highlightOption('ra-fontsize-options', size);
         var contentEl = document.getElementById('reading-content');
-        if (contentEl) {
-            var map = { small: '14px', medium: '16px', large: '19px' };
-            contentEl.style.fontSize = map[size] || '16px';
+        if (contentEl) { contentEl.style.fontSize = ({ small:'14px', medium:'16px', large:'18px' })[size] || '16px'; }
+    };
+
+    window.applyLineHeight = function(h) {
+        var s = getSettings(); s.lineHeight = h; saveSettings(s);
+        highlightOption('ra-lineheight-options', h);
+        var contentEl = document.getElementById('reading-content');
+        if (contentEl) { contentEl.style.lineHeight = ({ compact:'1.5', normal:'1.8', loose:'2.2' })[h] || '1.8'; }
+    };
+
+    window.applyPaddingX = function(v) {
+        var s = getSettings(); s.paddingX = v; saveSettings(s);
+        highlightOption('ra-paddingx-options', v);
+        var contentEl = document.getElementById('reading-content');
+        if (contentEl) { contentEl.style.padding = '20px ' + ({ narrow:'3%', medium:'6%', wide:'10%' })[v] || '6%'; }
+    };
+
+    window.applyParaSpacing = function(v) {
+        var s = getSettings(); s.paraSpacing = v; saveSettings(s);
+        highlightOption('ra-paraspacing-options', v);
+        var contentEl = document.getElementById('reading-content');
+        if (!contentEl) return;
+        var map = { compact:'8px', normal:'16px', loose:'28px' };
+        var ps = contentEl.querySelectorAll('p');
+        for (var i = 0; i < ps.length; i++) { ps[i].style.marginBottom = map[v] || '16px'; }
+    };
+
+    window.applyFontFamily = function(v) {
+        var s = getSettings(); s.fontFamily = v; saveSettings(s);
+        var contentEl = document.getElementById('reading-content');
+        if (!contentEl) return;
+        var map = { sans: '-apple-system, "Helvetica Neue", Arial, sans-serif', serif: 'Georgia, "Times New Roman", serif', handwriting: '"Ma Shan Zheng", "ZCOOL XiaoWei", cursive' };
+        if (map[v]) { contentEl.style.fontFamily = map[v]; }
+        else { contentEl.style.fontFamily = v; } // custom font name
+    };
+
+    window.applyTextColor = function(c) {
+        var s = getSettings(); s.textColor = c; saveSettings(s);
+        var contentEl = document.getElementById('reading-content');
+        if (contentEl) contentEl.style.color = c;
+    };
+
+    window.applyBgColor = function(c) {
+        var s = getSettings(); s.bgColor = c; saveSettings(s);
+        if (!s.nightMode) {
+            var body = document.getElementById('reading-body');
+            var page = document.getElementById('reading-page');
+            if (body) body.style.background = c;
+            if (page) page.style.background = c;
         }
     };
 
-    window.applyLineHeight = function(height) {
+    function renderSavedBgColors() {
+        var container = document.getElementById('ra-saved-bg-colors');
+        if (!container) return;
+        container.innerHTML = '';
         var s = getSettings();
-        s.lineHeight = height;
-        saveSettings(s);
-        highlightOption('ra-lineheight-options', height);
+        var saved = s.savedBgColors || [];
+        for (var i = 0; i < saved.length; i++) {
+            (function(color, idx) {
+                var el = document.createElement('div');
+                el.className = 'ra-saved-color-item';
+                el.style.background = color;
+                el.onclick = function() { applyBgColor(color); };
+                container.appendChild(el);
+            })(saved[i], i);
+        }
+    }
+
+    window.saveBgColorPreset = function() {
+        var s = getSettings();
+        if (!s.savedBgColors) s.savedBgColors = [];
+        var c = s.bgColor || '#faf8f5';
+        if (s.savedBgColors.indexOf(c) === -1) {
+            if (s.savedBgColors.length >= 5) s.savedBgColors.shift();
+            s.savedBgColors.push(c);
+            saveSettings(s);
+        }
+        renderSavedBgColors();
+    };
+
+    window.applyPageMode = function(mode) {
+        var s = getSettings(); s.pageMode = mode; saveSettings(s);
+        highlightOption('ra-pagemode-options', mode);
+        setupPageMode(mode);
+    };
+
+    function setupPageMode(mode) {
+        var body = document.getElementById('reading-body');
+        var contentEl = document.getElementById('reading-content');
+        if (!body || !contentEl) return;
+        body.classList.remove('ra-page-scroll', 'ra-page-smooth', 'ra-page-flip');
+        body.classList.add('ra-page-' + mode);
+        // Smooth and flip modes need special handling
+        if (mode === 'smooth' || mode === 'flip') {
+            setupPaginatedMode(mode);
+        } else {
+            teardownPaginatedMode();
+        }
+    }
+
+    var raPaginatedState = { pages: [], currentPage: 0, startX: 0 };
+
+    function setupPaginatedMode(mode) {
+        var body = document.getElementById('reading-body');
+        if (!body) return;
+        body.style.overflow = 'hidden';
+        paginateContent();
+        body.addEventListener('touchstart', onPageTouchStart, { passive: true });
+        body.addEventListener('touchend', onPageTouchEnd, { passive: true });
+    }
+
+    function teardownPaginatedMode() {
+        var body = document.getElementById('reading-body');
+        if (!body) return;
+        body.style.overflow = '';
+        var contentEl = document.getElementById('reading-content');
+        if (contentEl) contentEl.style.transform = '';
+        body.removeEventListener('touchstart', onPageTouchStart);
+        body.removeEventListener('touchend', onPageTouchEnd);
+    }
+
+    function paginateContent() {
+        var body = document.getElementById('reading-body');
+        var contentEl = document.getElementById('reading-content');
+        if (!body || !contentEl) return;
+        var pageH = body.clientHeight;
+        var totalH = contentEl.scrollHeight;
+        raPaginatedState.pages = Math.max(1, Math.ceil(totalH / pageH));
+        raPaginatedState.currentPage = 0;
+        contentEl.style.transition = 'transform 0.3s ease';
+    }
+
+    function onPageTouchStart(e) { raPaginatedState.startX = e.touches[0].clientX; }
+    function onPageTouchEnd(e) {
+        var dx = e.changedTouches[0].clientX - raPaginatedState.startX;
+        var body = document.getElementById('reading-body');
+        if (!body) return;
+        var pageH = body.clientHeight;
+        if (dx < -50 && raPaginatedState.currentPage < raPaginatedState.pages - 1) {
+            raPaginatedState.currentPage++;
+        } else if (dx > 50 && raPaginatedState.currentPage > 0) {
+            raPaginatedState.currentPage--;
+        }
         var contentEl = document.getElementById('reading-content');
         if (contentEl) {
-            var map = { compact: '1.5', normal: '1.8', loose: '2.2' };
-            contentEl.style.lineHeight = map[height] || '1.8';
+            var s = getSettings();
+            if (s.pageMode === 'flip') {
+                contentEl.style.transition = 'transform 0.5s cubic-bezier(0.2,0.8,0.3,1)';
+            } else {
+                contentEl.style.transition = 'transform 0.3s ease';
+            }
+            contentEl.style.transform = 'translateY(-' + (raPaginatedState.currentPage * pageH) + 'px)';
         }
+    }
+
+    window.applyAnnotationFont = function(v) {
+        var s = getSettings(); s.annotationFont = v; saveSettings(s);
+        applyAnnotationStyles();
     };
+
+    window.applyAnnotationStyle = function(v) {
+        var s = getSettings(); s.annotationStyle = v; saveSettings(s);
+        highlightOption('ra-annstyle-options', v);
+        applyAnnotationStyles();
+    };
+
+    window.applyAnnotationColors = function() {
+        var s = getSettings();
+        var bg = document.getElementById('ra-ann-bgcolor');
+        var tc = document.getElementById('ra-ann-textcolor');
+        if (bg) s.annotationBgColor = bg.value;
+        if (tc) s.annotationTextColor = tc.value;
+        saveSettings(s);
+        applyAnnotationStyles();
+    };
+
+    function applyAnnotationStyles() {
+        var s = getSettings();
+        var els = document.querySelectorAll('.char-annotation');
+        var fontMap = { sans:'-apple-system,sans-serif', serif:'Georgia,serif', handwriting:'"Ma Shan Zheng",cursive', inherit:'inherit' };
+        for (var i = 0; i < els.length; i++) {
+            els[i].className = 'char-annotation';
+            var style = s.annotationStyle || 'line';
+            if (style !== 'line') els[i].classList.add('ann-style-' + style);
+            els[i].style.fontFamily = fontMap[s.annotationFont || 'inherit'] || 'inherit';
+            if (s.annotationBgColor && style !== 'minimal') els[i].style.background = s.annotationBgColor;
+            if (s.annotationTextColor) els[i].style.color = s.annotationTextColor;
+        }
+    }
+
+    window.applyTtsSpeed = function(v) {
+        var s = getSettings(); s.ttsSpeed = v; saveSettings(s);
+        highlightOption('ra-tts-speed-options', String(v));
+    };
+
+    // 自定义字体上传
+    window.uploadCustomFont = function(target) {
+        var input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.ttf,.otf,.woff,.woff2';
+        input.onchange = function(e) {
+            var file = e.target.files[0];
+            if (!file) return;
+            var fontName = file.name.replace(/\.(ttf|otf|woff2?)$/i, '');
+            var reader = new FileReader();
+            reader.onload = function(ev) {
+                var base64 = ev.target.result;
+                registerCustomFont(fontName, base64, target);
+            };
+            reader.readAsDataURL(file);
+        };
+        input.click();
+    };
+
+    window.loadFontFromUrl = function(target) {
+        var urlInput = document.getElementById('ra-font-url');
+        if (!urlInput || !urlInput.value.trim()) return;
+        var url = urlInput.value.trim();
+        var fontName = url.split('/').pop().replace(/\.(ttf|otf|woff2?)$/i, '') || 'CustomFont';
+        registerCustomFont(fontName, 'url(' + url + ')', target);
+        urlInput.value = '';
+    };
+
+    function registerCustomFont(fontName, src, target) {
+        try {
+            var fontSrc = src.startsWith('url(') ? src : 'url(' + src + ')';
+            var font = new FontFace(fontName, fontSrc);
+            font.load().then(function(loaded) {
+                document.fonts.add(loaded);
+                var s = getSettings();
+                if (!s.customFonts) s.customFonts = [];
+                var existing = s.customFonts.find(function(f) { return f.name === fontName; });
+                if (!existing) {
+                    s.customFonts.push({ name: fontName, src: src });
+                    saveSettings(s);
+                }
+                loadCustomFontsToSelect();
+                if (target === 'body') applyFontFamily(fontName);
+            }).catch(function(err) { alert('字体加载失败: ' + err.message); });
+        } catch(err) { alert('字体注册失败: ' + err.message); }
+    }
+
+    function loadCustomFontsToSelect() {
+        var s = getSettings();
+        var fonts = s.customFonts || [];
+        var select = document.getElementById('ra-fontfamily-select');
+        if (!select) return;
+        // Remove old custom options
+        var opts = select.querySelectorAll('option[data-custom]');
+        for (var i = 0; i < opts.length; i++) opts[i].remove();
+        // Add custom fonts
+        for (var j = 0; j < fonts.length; j++) {
+            var opt = document.createElement('option');
+            opt.value = fonts[j].name;
+            opt.textContent = fonts[j].name;
+            opt.setAttribute('data-custom', '1');
+            opt.style.fontFamily = fonts[j].name;
+            select.appendChild(opt);
+            // Register font if not already loaded
+            if (!document.fonts.check('16px "' + fonts[j].name + '"')) {
+                try {
+                    var fontSrc = fonts[j].src.startsWith('url(') ? fonts[j].src : 'url(' + fonts[j].src + ')';
+                    var f = new FontFace(fonts[j].name, fontSrc);
+                    f.load().then(function(loaded) { document.fonts.add(loaded); });
+                } catch(e) {}
+            }
+        }
+        if (s.fontFamily) select.value = s.fontFamily;
+    }
 
     function highlightOption(containerId, activeVal) {
         var container = document.getElementById(containerId);
@@ -40176,12 +41031,391 @@ document.addEventListener('click', (e) => {
     function applySettings() {
         var s = getSettings();
         var contentEl = document.getElementById('reading-content');
-        if (contentEl) {
-            var fsMap = { small: '14px', medium: '16px', large: '19px' };
-            var lhMap = { compact: '1.5', normal: '1.8', loose: '2.2' };
-            contentEl.style.fontSize = fsMap[s.fontSize || 'medium'] || '16px';
-            contentEl.style.lineHeight = lhMap[s.lineHeight || 'normal'] || '1.8';
+        if (!contentEl) return;
+        var fsMap = { small:'14px', medium:'16px', large:'18px' };
+        var lhMap = { compact:'1.5', normal:'1.8', loose:'2.2' };
+        var pxMap = { narrow:'3%', medium:'6%', wide:'10%' };
+        contentEl.style.fontSize = fsMap[s.fontSize || 'medium'] || '16px';
+        contentEl.style.lineHeight = lhMap[s.lineHeight || 'normal'] || '1.8';
+        contentEl.style.padding = '20px ' + (pxMap[s.paddingX || 'medium'] || '6%');
+        if (s.textColor) contentEl.style.color = s.textColor;
+        if (s.fontFamily) {
+            var fMap = { sans:'-apple-system,"Helvetica Neue",Arial,sans-serif', serif:'Georgia,"Times New Roman",serif', handwriting:'"Ma Shan Zheng","ZCOOL XiaoWei",cursive' };
+            contentEl.style.fontFamily = fMap[s.fontFamily] || s.fontFamily;
         }
+        if (s.paraSpacing) {
+            var psMap = { compact:'8px', normal:'16px', loose:'28px' };
+            var ps = contentEl.querySelectorAll('p');
+            for (var i = 0; i < ps.length; i++) { ps[i].style.marginBottom = psMap[s.paraSpacing] || '16px'; }
+        }
+        // 背景色
+        if (!s.nightMode && s.bgColor) {
+            var body = document.getElementById('reading-body');
+            var page = document.getElementById('reading-page');
+            if (body) body.style.background = s.bgColor;
+            if (page) page.style.background = s.bgColor;
+        }
+        // 翻页模式
+        if (s.pageMode && s.pageMode !== 'scroll') { setupPageMode(s.pageMode); }
+        // 批注样式
+        applyAnnotationStyles();
+        // 加载自定义字体
+        loadCustomFontsToSelect();
     }
+
+    // ===== 书内搜索 (Step 21) =====
+    var raSearchMatches = [];
+    var raSearchCurrent = -1;
+
+    window.openSearchBar = function() {
+        hideReadingMenu();
+        var bar = document.getElementById('reading-search-bar');
+        if (bar) { bar.style.display = 'block'; }
+        var input = document.getElementById('ra-search-input');
+        if (input) { input.value = ''; input.focus(); }
+        clearSearchHighlights();
+    };
+
+    window.closeSearchBar = function() {
+        var bar = document.getElementById('reading-search-bar');
+        if (bar) bar.style.display = 'none';
+        clearSearchHighlights();
+    };
+
+    function clearSearchHighlights() {
+        var contentEl = document.getElementById('reading-content');
+        if (!contentEl) return;
+        var marks = contentEl.querySelectorAll('.ra-search-hl');
+        for (var i = marks.length - 1; i >= 0; i--) {
+            var parent = marks[i].parentNode;
+            parent.replaceChild(document.createTextNode(marks[i].textContent), marks[i]);
+            parent.normalize();
+        }
+        raSearchMatches = [];
+        raSearchCurrent = -1;
+    }
+
+    window.onSearchInput = function() {
+        clearSearchHighlights();
+        var input = document.getElementById('ra-search-input');
+        var keyword = input ? input.value.trim() : '';
+        var countEl = document.getElementById('ra-search-count');
+        if (!keyword) { if (countEl) countEl.textContent = '0处'; return; }
+
+        var contentEl = document.getElementById('reading-content');
+        if (!contentEl) return;
+        var ps = contentEl.querySelectorAll('p');
+        raSearchMatches = [];
+        var re = new RegExp(keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+        for (var i = 0; i < ps.length; i++) {
+            var p = ps[i];
+            if (p.querySelector('.char-annotation, mark')) continue; // skip complex nodes
+            var text = p.textContent;
+            if (!re.test(text)) continue;
+            re.lastIndex = 0;
+            var html = p.innerHTML;
+            var escaped = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            var hlRe = new RegExp('(' + escaped + ')', 'gi');
+            p.innerHTML = html.replace(hlRe, '<span class="ra-search-hl" style="background:rgba(255,200,0,0.4);border-radius:2px;">$1</span>');
+            var hls = p.querySelectorAll('.ra-search-hl');
+            for (var j = 0; j < hls.length; j++) raSearchMatches.push(hls[j]);
+        }
+        if (countEl) countEl.textContent = raSearchMatches.length + '处';
+        if (raSearchMatches.length > 0) { raSearchCurrent = 0; focusSearchMatch(); }
+    };
+
+    window.searchJump = function(dir) {
+        if (raSearchMatches.length === 0) return;
+        raSearchCurrent = (raSearchCurrent + dir + raSearchMatches.length) % raSearchMatches.length;
+        focusSearchMatch();
+    };
+
+    function focusSearchMatch() {
+        for (var i = 0; i < raSearchMatches.length; i++) {
+            raSearchMatches[i].style.background = i === raSearchCurrent ? 'rgba(255,140,0,0.6)' : 'rgba(255,200,0,0.4)';
+        }
+        var body = document.getElementById('reading-body');
+        if (body && raSearchMatches[raSearchCurrent]) {
+            body.scrollTop = raSearchMatches[raSearchCurrent].offsetTop - 100;
+        }
+        var countEl = document.getElementById('ra-search-count');
+        if (countEl) countEl.textContent = (raSearchCurrent + 1) + '/' + raSearchMatches.length;
+    }
+
+    // ===== 听书功能 (TTS) =====
+    var raCurrentAudio = null;
+    window.listenToParagraph = function() {
+        closeParagraphMenu();
+        if (!raPendingParagraph) return;
+        var s = getSettings();
+        if (!s.ttsEnabled) { alert('请先在设置中启用听书功能'); return; }
+        var text = raPendingParagraph.textContent;
+        var speed = s.ttsSpeed || 1;
+        var source = s.ttsSource || 'system';
+
+        if (raCurrentAudio) { raCurrentAudio.pause(); raCurrentAudio = null; }
+        if (window.speechSynthesis) window.speechSynthesis.cancel();
+
+        if (source === 'system') {
+            var utter = new SpeechSynthesisUtterance(text);
+            utter.rate = speed;
+            utter.lang = 'zh-CN';
+            window.speechSynthesis.speak(utter);
+        } else if (source === 'minimax') {
+            var apiKey = s.ttsKey;
+            var groupId = s.ttsGroupId;
+            if (!apiKey || !groupId) { alert('请先填写 MiniMax API Key 和 Group ID'); return; }
+            fetch('https://api.minimax.chat/v1/t2a_v2?GroupId=' + groupId, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
+                body: JSON.stringify({ model: 'speech-01-turbo', text: text, speed: speed })
+            }).then(function(r) { return r.json(); }).then(function(d) {
+                if (d.data && d.data.audio) {
+                    raCurrentAudio = new Audio('data:audio/mp3;base64,' + d.data.audio);
+                    raCurrentAudio.play();
+                }
+            }).catch(function(e) { alert('TTS 请求失败'); });
+        } else if (source === 'custom') {
+            var url = s.ttsUrl;
+            if (!url) { alert('请先填写自定义 TTS 接口 URL'); return; }
+            fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text: text, speed: speed })
+            }).then(function(r) { return r.blob(); }).then(function(blob) {
+                raCurrentAudio = new Audio(URL.createObjectURL(blob));
+                raCurrentAudio.play();
+            }).catch(function(e) { alert('TTS 请求失败'); });
+        }
+    };
+
+    // ========== 导出笔记 ==========
+    window.exportNotesAsMarkdown = function() {
+        if (raCurrentBook === null) return;
+        var books = JSON.parse(localStorage.getItem('ra_books') || '[]');
+        var book = books[raCurrentBook];
+        if (!book) return;
+        var bookTitle = book.title || '未知书名';
+        var allNotes = JSON.parse(localStorage.getItem('ra_notes') || '[]');
+        var allAnnotations = JSON.parse(localStorage.getItem('ra_annotations') || '[]');
+        var myNotes = allNotes.filter(function(n) { return n.bookIndex === raCurrentBook; });
+        var myAnns = allAnnotations.filter(function(a) { return a.bookIndex === raCurrentBook; });
+
+        if (myNotes.length === 0 && myAnns.length === 0) {
+            alert('当前书籍没有笔记或批注');
+            return;
+        }
+
+        // Group by chapter
+        var chapters = {};
+        myNotes.forEach(function(n) {
+            var ch = n.chapter || '未分章';
+            if (!chapters[ch]) chapters[ch] = { notes: [], annotations: [] };
+            chapters[ch].notes.push(n);
+        });
+        myAnns.forEach(function(a) {
+            var ch = a.chapter || '未分章';
+            if (!chapters[ch]) chapters[ch] = { notes: [], annotations: [] };
+            chapters[ch].annotations.push(a);
+        });
+
+        var md = '# 《' + bookTitle + '》笔记\n\n';
+        var chapterNames = Object.keys(chapters);
+        chapterNames.forEach(function(chName) {
+            var data = chapters[chName];
+            md += '## ' + chName + '\n\n';
+            // Notes
+            if (data.notes.length > 0) {
+                data.notes.forEach(function(n) {
+                    if (n.selectedText) {
+                        md += '> ' + n.selectedText.replace(/\n/g, '\n> ') + '\n\n';
+                    }
+                    if (n.note) {
+                        md += n.note + '\n\n';
+                    }
+                    if (n.time) {
+                        md += '*' + n.time + '*\n\n';
+                    }
+                    md += '---\n\n';
+                });
+            }
+            // Annotations
+            if (data.annotations.length > 0) {
+                md += '### 角色批注\n\n';
+                data.annotations.forEach(function(a) {
+                    if (a.selectedText || a.paragraphText) {
+                        var txt = a.selectedText || a.paragraphText || '';
+                        md += '> ' + txt.replace(/\n/g, '\n> ') + '\n\n';
+                    }
+                    md += '**' + (a.charName || '未知角色') + '**：' + (a.content || '') + '\n\n';
+                    if (a.replies && a.replies.length > 0) {
+                        a.replies.forEach(function(r) {
+                            md += '> 回复：' + r.content + '\n\n';
+                        });
+                    }
+                    if (a.time) {
+                        md += '*' + a.time + '*\n\n';
+                    }
+                    md += '---\n\n';
+                });
+            }
+        });
+
+        // Trigger download
+        var blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = bookTitle + '_笔记.md';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    };
+
+    // ========== 阅读统计 ==========
+    window.openReadingStats = function() {
+        var statsPage = document.getElementById('reading-stats-page');
+        var bookshelfPage = document.getElementById('bookshelf-page');
+        if (!statsPage) return;
+        bookshelfPage.style.display = 'none';
+        statsPage.style.display = 'flex';
+        renderReadingStats();
+    };
+
+    window.closeReadingStats = function() {
+        var statsPage = document.getElementById('reading-stats-page');
+        var bookshelfPage = document.getElementById('bookshelf-page');
+        if (statsPage) statsPage.style.display = 'none';
+        if (bookshelfPage) bookshelfPage.style.display = 'flex';
+    };
+
+    function formatReadTime(ms) {
+        if (!ms || ms <= 0) return '0分钟';
+        var totalMin = Math.floor(ms / 60000);
+        if (totalMin < 60) return totalMin + '分钟';
+        var h = Math.floor(totalMin / 60);
+        var m = totalMin % 60;
+        return h + '小时' + (m > 0 ? m + '分钟' : '');
+    }
+
+    function renderReadingStats() {
+        var container = document.getElementById('reading-stats-content');
+        if (!container) return;
+        var books = JSON.parse(localStorage.getItem('ra_books') || '[]');
+        var state = JSON.parse(localStorage.getItem('ra_readingState') || '{}');
+
+        // Calculate totals
+        var totalTime = 0;
+        var booksRead = 0;
+        var bookStats = [];
+        books.forEach(function(b, i) {
+            var bt = b.readingTime || 0;
+            totalTime += bt;
+            var prog = b.progress || 0;
+            if (prog >= 100) booksRead++;
+            bookStats.push({ title: b.title || '未知', progress: prog, time: bt, index: i });
+        });
+
+        // Weekly reading data (from per-day records stored in ra_dailyReading)
+        var dailyData = JSON.parse(localStorage.getItem('ra_dailyReading') || '{}');
+        var today = new Date();
+        var weekDays = [];
+        var weekLabels = ['日', '一', '二', '三', '四', '五', '六'];
+        var maxDayTime = 1; // avoid divide by zero
+        for (var d = 6; d >= 0; d--) {
+            var dt = new Date(today);
+            dt.setDate(dt.getDate() - d);
+            var key = dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0') + '-' + String(dt.getDate()).padStart(2, '0');
+            var dayTime = dailyData[key] || 0;
+            if (dayTime > maxDayTime) maxDayTime = dayTime;
+            weekDays.push({ label: weekLabels[dt.getDay()], time: dayTime, key: key });
+        }
+
+        var html = '';
+        // Summary cards
+        html += '<div style="display:flex;gap:12px;margin-bottom:20px;">';
+        html += '<div style="flex:1;background:#fff;border-radius:12px;padding:16px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,0.08);">';
+        html += '<div style="font-size:24px;font-weight:bold;color:#8B7355;">' + formatReadTime(totalTime) + '</div>';
+        html += '<div style="font-size:12px;color:#999;margin-top:4px;">总阅读时长</div></div>';
+        html += '<div style="flex:1;background:#fff;border-radius:12px;padding:16px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,0.08);">';
+        html += '<div style="font-size:24px;font-weight:bold;color:#8B7355;">' + booksRead + '</div>';
+        html += '<div style="font-size:12px;color:#999;margin-top:4px;">已读完</div></div>';
+        html += '<div style="flex:1;background:#fff;border-radius:12px;padding:16px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,0.08);">';
+        html += '<div style="font-size:24px;font-weight:bold;color:#8B7355;">' + books.length + '</div>';
+        html += '<div style="font-size:12px;color:#999;margin-top:4px;">总书数</div></div>';
+        html += '</div>';
+
+        // Weekly chart
+        html += '<div style="background:#fff;border-radius:12px;padding:16px;margin-bottom:20px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">';
+        html += '<div style="font-size:14px;font-weight:bold;margin-bottom:12px;color:#333;">本周阅读</div>';
+        html += '<div style="display:flex;align-items:flex-end;justify-content:space-around;height:120px;gap:4px;">';
+        weekDays.forEach(function(wd) {
+            var pct = Math.max(4, (wd.time / maxDayTime) * 100);
+            var barColor = wd.time > 0 ? '#8B7355' : '#E0D6C8';
+            html += '<div style="display:flex;flex-direction:column;align-items:center;flex:1;">';
+            html += '<div style="font-size:10px;color:#999;margin-bottom:4px;">' + (wd.time > 0 ? formatReadTime(wd.time) : '') + '</div>';
+            html += '<div style="width:100%;max-width:28px;height:' + pct + '%;background:' + barColor + ';border-radius:4px 4px 0 0;min-height:4px;transition:height .3s;"></div>';
+            html += '<div style="font-size:11px;color:#666;margin-top:6px;">' + wd.label + '</div>';
+            html += '</div>';
+        });
+        html += '</div></div>';
+
+        // Per-book progress
+        html += '<div style="background:#fff;border-radius:12px;padding:16px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">';
+        html += '<div style="font-size:14px;font-weight:bold;margin-bottom:12px;color:#333;">书籍进度</div>';
+        if (bookStats.length === 0) {
+            html += '<div style="color:#999;text-align:center;padding:20px;">暂无书籍</div>';
+        }
+        bookStats.forEach(function(bs) {
+            html += '<div style="display:flex;align-items:center;padding:10px 0;border-bottom:1px solid #f0f0f0;">';
+            html += '<div style="flex:1;min-width:0;">';
+            html += '<div style="font-size:13px;color:#333;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + bs.title + '</div>';
+            html += '<div style="display:flex;align-items:center;gap:8px;margin-top:6px;">';
+            html += '<div style="flex:1;height:4px;background:#EDE8E0;border-radius:2px;overflow:hidden;">';
+            html += '<div style="width:' + Math.min(100, bs.progress) + '%;height:100%;background:#8B7355;border-radius:2px;"></div></div>';
+            html += '<span style="font-size:11px;color:#999;white-space:nowrap;">' + Math.round(bs.progress) + '%</span>';
+            html += '</div></div>';
+            html += '<div style="margin-left:12px;font-size:11px;color:#999;white-space:nowrap;">' + formatReadTime(bs.time) + '</div>';
+            html += '</div>';
+        });
+        html += '</div>';
+
+        container.innerHTML = html;
+    }
+
+    // Record daily reading time
+    function recordDailyReading(ms) {
+        if (!ms || ms <= 0) return;
+        var dailyData = JSON.parse(localStorage.getItem('ra_dailyReading') || '{}');
+        var today = new Date();
+        var key = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+        dailyData[key] = (dailyData[key] || 0) + ms;
+        // Keep only last 30 days
+        var keys = Object.keys(dailyData).sort();
+        while (keys.length > 30) {
+            delete dailyData[keys.shift()];
+        }
+        localStorage.setItem('ra_dailyReading', JSON.stringify(dailyData));
+    }
+
+    // Patch autoSaveReadingState to also record daily reading
+    var _origAutoSave = window.autoSaveReadingState;
+    window.autoSaveReadingState = function() {
+        var prevTime = 0;
+        if (raCurrentBook !== null) {
+            var books = JSON.parse(localStorage.getItem('ra_books') || '[]');
+            if (books[raCurrentBook]) prevTime = books[raCurrentBook].readingTime || 0;
+        }
+        if (_origAutoSave) _origAutoSave();
+        if (raCurrentBook !== null) {
+            var books2 = JSON.parse(localStorage.getItem('ra_books') || '[]');
+            if (books2[raCurrentBook]) {
+                var newTime = books2[raCurrentBook].readingTime || 0;
+                var diff = newTime - prevTime;
+                if (diff > 0) recordDailyReading(diff);
+            }
+        }
+    };
 
 })();

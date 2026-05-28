@@ -14766,3 +14766,30 @@ body.night-mode .ra-setting-label { color: #6a6050; }
 body.night-mode .ra-setting-input { background: #252118; border-color: #3a3530; color: #c8b99a; }
 body.night-mode .ra-setting-options button { background: #252118; border-color: #3a3530; color: #8a7a60; }
 body.night-mode .ra-setting-options button.active { background: #bf9e6a; color: #1a1814; border-color: #bf9e6a; }
+
+/* ===== 阅读App Step 17: 笔记标记样式 ===== */
+.ra-mark-highlight-yellow { background: rgba(255,235,59,0.35); border-radius: 2px; }
+.ra-mark-highlight-green { background: rgba(129,199,132,0.35); border-radius: 2px; }
+.ra-mark-highlight-pink { background: rgba(244,143,177,0.35); border-radius: 2px; }
+.ra-mark-highlight-blue { background: rgba(100,181,246,0.35); border-radius: 2px; }
+.ra-mark-underline-solid { text-decoration: underline; text-decoration-color: #bf9e6a; text-underline-offset: 3px; }
+.ra-mark-underline-dashed { text-decoration: underline dashed; text-decoration-color: #bf9e6a; text-underline-offset: 3px; }
+.ra-mark-underline-wavy { text-decoration: underline wavy; text-decoration-color: #bf9e6a; text-underline-offset: 3px; }
+.ra-mark-strikethrough { text-decoration: line-through; text-decoration-color: #e57373; }
+.ra-mark-box { border: 1px solid #bf9e6a; border-radius: 3px; padding: 0 2px; }
+.ra-mark-flash { animation: ra-mark-flash-anim 0.6s ease 2; }
+@keyframes ra-mark-flash-anim { 0%,100% { opacity:1; } 50% { opacity:0.3; } }
+
+/* 标记样式选择菜单 */
+#ra-mark-style-menu { position:fixed; z-index:320; background:#fff; border-radius:14px; box-shadow:0 8px 30px rgba(0,0,0,0.15); padding:12px; min-width:220px; }
+.ra-mark-style-row { display:flex; gap:6px; margin-bottom:8px; align-items:center; }
+.ra-mark-style-row-label { font-size:11px; color:#999; margin-bottom:4px; }
+.ra-mark-color-btn { width:28px; height:28px; border-radius:50%; border:2px solid #E0E0E0; cursor:pointer; }
+.ra-mark-color-btn:active { transform:scale(0.9); }
+.ra-mark-color-btn.active { border-color:#333; box-shadow:0 0 0 2px #333; }
+.ra-mark-type-btn { border:1px solid #DDD; background:#fff; border-radius:6px; padding:4px 10px; font-size:12px; color:#666; cursor:pointer; }
+.ra-mark-type-btn:active { background:#F0F0F0; }
+.ra-mark-type-btn.active { background:#333; color:#fff; border-color:#333; }
+
+/* 笔记面板增强 */
+.ra-note-color-dot { width:10px; height:10px; border-radius:50%; display:inline-block; margin-right:6px; flex-shrink:0; }

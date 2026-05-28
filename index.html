@@ -1377,7 +1377,7 @@
         .ra-reading-bookname { flex:1; text-align:center; font-size:15px; font-weight:500; color:#444; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
         .ra-reading-avatar { width:32px; height:32px; border-radius:50%; background:#F0F0F0; display:flex; align-items:center; justify-content:center; }
         .ra-reading-body { flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch; position:relative; }
-        #reading-content { padding:20px 5%; line-height:1.8; font-size:16px; color:#333; }
+        #reading-content { padding:20px 5%; line-height:1.8; font-size:16px; color:#333; user-select:text; -webkit-user-select:text; cursor:text; }
         #reading-content p { margin:0 0 16px 0; text-indent:2em; position:relative; }
         #reading-content p.ra-has-note { border-left:3px solid #bf9e6a; padding-left:10px; }
         #reading-tap-zone { position:absolute; top:30%; left:25%; width:50%; height:40%; z-index:5; cursor:pointer; }
@@ -1457,6 +1457,63 @@
         .ra-setting-options button { flex:1; border:1px solid #E0E0E0; background:#fff; border-radius:8px; padding:8px 0; font-size:13px; color:#666; cursor:pointer; transition:all 0.15s; }
         .ra-setting-options button.active { background:#333; color:#fff; border-color:#333; }
         .ra-setting-options button:active { transform:scale(0.96); }
+
+        /* ===== 选角色面板 ===== */
+        #char-picker { position:fixed; bottom:-100%; left:0; right:0; max-height:60%; background:#fff; border-top-left-radius:20px; border-top-right-radius:20px; box-shadow:0 -4px 20px rgba(0,0,0,0.1); z-index:220; transition:bottom 0.3s cubic-bezier(0.25,0.8,0.25,1); display:flex; flex-direction:column; }
+        #char-picker.show { bottom:0; }
+        #char-picker-overlay.show { display:block; z-index:215; }
+        .ra-char-item { display:flex; align-items:center; gap:12px; padding:14px 20px; cursor:pointer; border-bottom:1px solid #F5F5F5; }
+        .ra-char-item:active { background:#F5F5F5; }
+        .ra-char-item.selected { background:#FBF9F4; }
+        .ra-char-avatar-circle { width:40px; height:40px; border-radius:50%; background:#E8E8E8; display:flex; align-items:center; justify-content:center; overflow:hidden; flex-shrink:0; font-size:18px; }
+        .ra-char-avatar-circle img { width:100%; height:100%; object-fit:cover; }
+        .ra-char-name { font-size:15px; color:#333; flex:1; }
+        .ra-char-check { width:20px; height:20px; display:flex; align-items:center; justify-content:center; }
+
+        /* ===== 批注提示条 ===== */
+        #annotation-toast { position:fixed; top:-60px; left:50%; transform:translateX(-50%); background:#fff; border-radius:12px; box-shadow:0 4px 16px rgba(0,0,0,0.1); padding:10px 18px; z-index:300; display:flex; align-items:center; font-size:13px; color:#333; cursor:pointer; white-space:nowrap; transition:top 0.3s cubic-bezier(0.25,0.8,0.25,1); }
+        #annotation-toast.show { top:60px; }
+
+        /* ===== 批注块增强(含角色头像) ===== */
+        .char-annotation-header { display:flex; align-items:center; gap:8px; margin-bottom:6px; }
+        .char-annotation-avatar { width:22px; height:22px; border-radius:50%; background:#E8E8E8; overflow:hidden; flex-shrink:0; font-size:11px; display:flex; align-items:center; justify-content:center; }
+        .char-annotation-avatar img { width:100%; height:100%; object-fit:cover; }
+
+        /* ===== 设置面板增强 ===== */
+        .ra-setting-section-title { font-size:14px; font-weight:600; color:#333; margin:20px 0 12px; padding-top:16px; border-top:1px solid #F0F0F0; }
+        .ra-setting-section-title:first-child { border-top:none; margin-top:0; padding-top:0; }
+        .ra-color-row { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+        .ra-color-preset { width:28px; height:28px; border-radius:50%; border:2px solid #E0E0E0; cursor:pointer; flex-shrink:0; }
+        .ra-color-preset:active { transform:scale(0.9); }
+        .ra-color-preset.active { border-color:#333; box-shadow:0 0 0 2px #333; }
+        .ra-bg-preset { border:2px solid #DDD; }
+        .ra-color-picker { width:28px; height:28px; border:none; padding:0; cursor:pointer; border-radius:50%; -webkit-appearance:none; appearance:none; background:none; }
+        .ra-color-picker::-webkit-color-swatch-wrapper { padding:0; }
+        .ra-color-picker::-webkit-color-swatch { border:2px solid #DDD; border-radius:50%; }
+        .ra-saved-colors { display:flex; gap:6px; margin-top:8px; flex-wrap:wrap; }
+        .ra-saved-color-item { width:24px; height:24px; border-radius:50%; border:2px solid #DDD; cursor:pointer; position:relative; }
+        .ra-saved-color-item:active { transform:scale(0.9); }
+        .ra-save-color-btn { margin-top:8px; border:1px dashed #CCC; background:none; color:#999; font-size:12px; padding:4px 12px; border-radius:6px; cursor:pointer; }
+        .ra-custom-font-row { display:flex; gap:6px; margin-top:8px; align-items:center; }
+        .ra-upload-font-btn { border:1px solid #DDD; background:#F8F8F8; color:#666; font-size:12px; padding:6px 10px; border-radius:6px; cursor:pointer; white-space:nowrap; }
+        .ra-setting-options-sm button { font-size:12px; padding:6px 0; }
+        .ra-toggle { position:relative; width:44px; height:24px; display:inline-block; }
+        .ra-toggle input { opacity:0; width:0; height:0; }
+        .ra-toggle-slider { position:absolute; cursor:pointer; top:0; left:0; right:0; bottom:0; background:#DDD; border-radius:12px; transition:0.3s; }
+        .ra-toggle-slider:before { content:''; position:absolute; width:18px; height:18px; left:3px; bottom:3px; background:#fff; border-radius:50%; transition:0.3s; }
+        .ra-toggle input:checked + .ra-toggle-slider { background:#333; }
+        .ra-toggle input:checked + .ra-toggle-slider:before { transform:translateX(20px); }
+
+        /* 批注样式变体 */
+        .char-annotation.ann-style-sticky { background:#FFF9E6; border-left:none; border-radius:8px; transform:rotate(-0.5deg); box-shadow:0 2px 6px rgba(0,0,0,0.06); padding:14px; }
+        .char-annotation.ann-style-bubble { background:#F0F0F0; border-left:none; border-radius:16px; position:relative; padding:12px 16px; }
+        .char-annotation.ann-style-bubble:after { content:''; position:absolute; left:16px; bottom:-6px; width:12px; height:12px; background:#F0F0F0; transform:rotate(45deg); }
+        .char-annotation.ann-style-minimal { background:none; border-left:none; border-top:1px solid #E0E0E0; border-radius:0; padding:8px 0; font-style:italic; }
+
+        /* ===== 书架分组 Tab ===== */
+        .ra-group-tabs { display:flex; gap:0; padding:0 20px; border-bottom:1px solid #EAEAEA; background:#F5F5F5; flex-shrink:0; }
+        .ra-group-tab { flex:1; text-align:center; padding:10px 0; font-size:13px; color:#999; cursor:pointer; border-bottom:2px solid transparent; transition:all 0.2s; }
+        .ra-group-tab.active { color:#333; font-weight:600; border-bottom-color:#333; }
         </style>
 
         <!-- ========================================== -->
@@ -1474,11 +1531,52 @@
                             </div>
                         </div>
                         <div class="ra-topbar-title">书架</div>
-                        <div class="ra-topbar-right"></div>
+                        <div class="ra-topbar-right" style="display:flex;gap:8px;align-items:center;">
+                            <div class="ra-back-btn" onclick="openReadingStats()">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M4 20V10M10 20V4M16 20V14M22 20V8" stroke="#333" stroke-width="1.5" stroke-linecap="round"/></svg>
+                            </div>
+                            <div class="ra-back-btn" onclick="toggleSortMenu()">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M3 6h18M3 12h14M3 18h10" stroke="#333" stroke-width="1.5" stroke-linecap="round"/></svg>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- 分组 Tab -->
+                    <div class="ra-group-tabs" id="ra-group-tabs">
+                        <span class="ra-group-tab active" data-group="all" onclick="switchBookGroup('all')">全部</span>
+                        <span class="ra-group-tab" data-group="want" onclick="switchBookGroup('want')">想读</span>
+                        <span class="ra-group-tab" data-group="reading" onclick="switchBookGroup('reading')">在读</span>
+                        <span class="ra-group-tab" data-group="done" onclick="switchBookGroup('done')">读完</span>
+                    </div>
+                    <!-- 排序菜单 -->
+                    <div id="ra-sort-menu" style="display:none; position:absolute; top:50px; right:16px; background:#fff; border-radius:10px; box-shadow:0 4px 16px rgba(0,0,0,0.1); z-index:50; min-width:120px; overflow:hidden;">
+                        <div class="ra-action-item" style="font-size:13px;padding:11px 16px;" onclick="applySortMode('recent')">最近阅读</div>
+                        <div class="ra-action-item" style="font-size:13px;padding:11px 16px;" onclick="applySortMode('name')">按书名</div>
+                        <div class="ra-action-item" style="font-size:13px;padding:11px 16px;" onclick="applySortMode('progress')">按进度</div>
                     </div>
                     <div class="ra-bookshelf-grid" id="bookshelf-grid">
                         <!-- 书卡由 JS 动态生成 -->
                     </div>
+                    <!-- 书卡长按菜单 -->
+                    <div id="ra-bookcard-menu" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:#fff; border-radius:14px; box-shadow:0 8px 30px rgba(0,0,0,0.15); z-index:300; min-width:180px; overflow:hidden;">
+                        <div class="ra-action-item" onclick="changeCoverImage()">更换封面</div>
+                        <div class="ra-action-item" onclick="moveBookToGroup()">移动分组</div>
+                        <div class="ra-action-item" style="color:#e57373;" onclick="deleteBook()">删除书籍</div>
+                        <div class="ra-action-item" style="color:#999;" onclick="closeBookCardMenu()">取消</div>
+                    </div>
+                </div>
+
+                <!-- ======== 阅读统计页 ======== -->
+                <div id="reading-stats-page" style="display:none; width:100%; height:100%; flex-direction:column; background:#F5F5F5; overflow-y:auto;">
+                    <div class="ra-topbar">
+                        <div class="ra-topbar-left">
+                            <div class="ra-back-btn" onclick="closeReadingStats()">
+                                <svg width="10" height="17" viewBox="0 0 10 17" fill="none"><path d="M9 1L1.5 8.5L9 16" stroke="#333" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                            </div>
+                        </div>
+                        <div class="ra-topbar-title">阅读统计</div>
+                        <div class="ra-topbar-right"></div>
+                    </div>
+                    <div id="reading-stats-content" style="padding:16px;"></div>
                 </div>
 
                 <!-- ======== 阅读页 ======== -->
@@ -1498,6 +1596,21 @@
                     </div>
 
                     <!-- 阅读菜单栏 -->
+                    <div id="reading-search-bar" style="display:none; position:fixed; top:0; left:0; right:0; background:#fff; z-index:110; padding:10px 16px; box-shadow:0 2px 10px rgba(0,0,0,0.08); display:none;">
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <input type="text" id="ra-search-input" class="ra-setting-input" placeholder="搜索…" style="flex:1;margin:0;padding:8px 12px;" oninput="onSearchInput()">
+                            <span id="ra-search-count" style="font-size:12px;color:#999;white-space:nowrap;">0处</span>
+                            <button onclick="searchJump(-1)" style="border:none;background:#F0F0F0;border-radius:50%;width:28px;height:28px;cursor:pointer;display:flex;align-items:center;justify-content:center;">
+                                <svg width="8" height="14" viewBox="0 0 8 14" fill="none"><path d="M7 1L1 7L7 13" stroke="#333" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                            </button>
+                            <button onclick="searchJump(1)" style="border:none;background:#F0F0F0;border-radius:50%;width:28px;height:28px;cursor:pointer;display:flex;align-items:center;justify-content:center;">
+                                <svg width="8" height="14" viewBox="0 0 8 14" fill="none"><path d="M1 1L7 7L1 13" stroke="#333" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                            </button>
+                            <button onclick="closeSearchBar()" style="border:none;background:none;cursor:pointer;padding:4px;">
+                                <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M1 1l12 12M13 1L1 13" stroke="#333" stroke-width="1.5" stroke-linecap="round"/></svg>
+                            </button>
+                        </div>
+                    </div>
                     <div id="reading-menu-overlay" onclick="hideReadingMenu()"></div>
                     <div id="reading-menu">
                         <div class="ra-menu-stats">
@@ -1544,6 +1657,10 @@
                                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke="#333" stroke-width="1.5"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83" stroke="#333" stroke-width="1.5" stroke-linecap="round"/></svg>
                                 <span>设置</span>
                             </button>
+                            <button class="ra-menu-action-btn" onclick="openSearchBar()">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="#333" stroke-width="1.5"/><path d="M16 16l5 5" stroke="#333" stroke-width="1.5" stroke-linecap="round"/></svg>
+                                <span>搜索</span>
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -1570,12 +1687,16 @@
                         </div>
                     </div>
                     <div id="notes-list" class="ra-panel-list"></div>
+                    <div style="padding:12px 16px;text-align:center;">
+                        <button onclick="exportNotesAsMarkdown()" style="width:100%;padding:10px 0;background:#8B7355;color:#fff;border:none;border-radius:8px;font-size:14px;cursor:pointer;">导出笔记</button>
+                    </div>
                 </div>
 
                 <!-- ======== 段落操作菜单 ======== -->
                 <div id="paragraph-action-menu" style="display:none;">
                     <div class="ra-action-item" onclick="startAddNote()">添加笔记</div>
                     <div class="ra-action-item" onclick="letCharSee()">让TA看看</div>
+                    <div class="ra-action-item" onclick="listenToParagraph()">听这段</div>
                     <div class="ra-action-item" onclick="closeParagraphMenu()">取消</div>
                 </div>
 
@@ -1584,12 +1705,36 @@
                     <div class="ra-note-input-box">
                         <div class="ra-note-input-title">添加笔记</div>
                         <div class="ra-note-selected-text" id="note-selected-text"></div>
+                        <!-- 标记样式选择 -->
+                        <div style="margin-bottom:12px;">
+                            <div style="font-size:12px;color:#999;margin-bottom:6px;">标记样式</div>
+                            <div class="ra-mark-style-row">
+                                <span class="ra-mark-color-btn active" data-mark="highlight-yellow" style="background:rgba(255,235,59,0.6);" onclick="selectMarkStyle(this)"></span>
+                                <span class="ra-mark-color-btn" data-mark="highlight-green" style="background:rgba(129,199,132,0.6);" onclick="selectMarkStyle(this)"></span>
+                                <span class="ra-mark-color-btn" data-mark="highlight-pink" style="background:rgba(244,143,177,0.6);" onclick="selectMarkStyle(this)"></span>
+                                <span class="ra-mark-color-btn" data-mark="highlight-blue" style="background:rgba(100,181,246,0.6);" onclick="selectMarkStyle(this)"></span>
+                            </div>
+                            <div class="ra-mark-style-row">
+                                <span class="ra-mark-type-btn" data-mark="underline-solid" onclick="selectMarkStyle(this)">实线</span>
+                                <span class="ra-mark-type-btn" data-mark="underline-dashed" onclick="selectMarkStyle(this)">虚线</span>
+                                <span class="ra-mark-type-btn" data-mark="underline-wavy" onclick="selectMarkStyle(this)">波浪</span>
+                                <span class="ra-mark-type-btn" data-mark="strikethrough" onclick="selectMarkStyle(this)">删除线</span>
+                                <span class="ra-mark-type-btn" data-mark="box" onclick="selectMarkStyle(this)">方框</span>
+                            </div>
+                        </div>
                         <textarea id="note-input-textarea" placeholder="写下你的想法…" rows="4"></textarea>
                         <div class="ra-note-input-btns">
                             <button class="ra-note-cancel" onclick="closeNoteInput()">取消</button>
                             <button class="ra-note-save" onclick="saveCurrentNote()">保存</button>
                         </div>
                     </div>
+                </div>
+
+                <!-- ======== 已标记文字点击菜单 ======== -->
+                <div id="ra-mark-click-menu" style="display:none; position:fixed; z-index:320; background:#fff; border-radius:12px; box-shadow:0 6px 20px rgba(0,0,0,0.12); overflow:hidden; min-width:140px;">
+                    <div class="ra-action-item" style="font-size:13px;padding:12px 18px;" onclick="viewMarkNote()">查看笔记</div>
+                    <div class="ra-action-item" style="font-size:13px;padding:12px 18px;" onclick="deleteCurrentMark()">删除标记</div>
+                    <div class="ra-action-item" style="font-size:13px;padding:12px 18px;color:#999;" onclick="closeMarkClickMenu()">取消</div>
                 </div>
 
                 <!-- ======== 设置面板 ======== -->
@@ -1602,18 +1747,8 @@
                         </div>
                     </div>
                     <div class="ra-settings-body">
-                        <div class="ra-setting-group">
-                            <label class="ra-setting-label">API Key</label>
-                            <input type="password" id="ra-apikey" class="ra-setting-input" placeholder="输入 Anthropic API Key" oninput="saveReadingSettings()">
-                        </div>
-                        <div class="ra-setting-group">
-                            <label class="ra-setting-label">当前书名（告知角色）</label>
-                            <input type="text" id="ra-bookname-setting" class="ra-setting-input" placeholder="正在读的书名" oninput="saveReadingSettings()">
-                        </div>
-                        <div class="ra-setting-group">
-                            <label class="ra-setting-label">角色人设补充</label>
-                            <textarea id="ra-char-prompt" class="ra-setting-input" rows="3" placeholder="自定义角色的 system prompt 补充内容" oninput="saveReadingSettings()"></textarea>
-                        </div>
+                        <!-- 阅读版式设置 -->
+                        <div class="ra-setting-section-title">阅读版式</div>
                         <div class="ra-setting-group">
                             <label class="ra-setting-label">字体大小</label>
                             <div class="ra-setting-options" id="ra-fontsize-options">
@@ -1630,7 +1765,160 @@
                                 <button onclick="applyLineHeight('loose')" data-val="loose">宽松</button>
                             </div>
                         </div>
+                        <div class="ra-setting-group">
+                            <label class="ra-setting-label">左右边距</label>
+                            <div class="ra-setting-options" id="ra-paddingx-options">
+                                <button onclick="applyPaddingX('narrow')" data-val="narrow">窄</button>
+                                <button onclick="applyPaddingX('medium')" data-val="medium" class="active">适中</button>
+                                <button onclick="applyPaddingX('wide')" data-val="wide">宽</button>
+                            </div>
+                        </div>
+                        <div class="ra-setting-group">
+                            <label class="ra-setting-label">段落间距</label>
+                            <div class="ra-setting-options" id="ra-paraspacing-options">
+                                <button onclick="applyParaSpacing('compact')" data-val="compact">紧凑</button>
+                                <button onclick="applyParaSpacing('normal')" data-val="normal" class="active">适中</button>
+                                <button onclick="applyParaSpacing('loose')" data-val="loose">宽松</button>
+                            </div>
+                        </div>
+                        <div class="ra-setting-group">
+                            <label class="ra-setting-label">正文字体</label>
+                            <select id="ra-fontfamily-select" class="ra-setting-input" onchange="applyFontFamily(this.value)">
+                                <option value="sans">无衬线</option>
+                                <option value="serif">衬线</option>
+                                <option value="handwriting">手写</option>
+                            </select>
+                            <div class="ra-custom-font-row">
+                                <button class="ra-upload-font-btn" onclick="uploadCustomFont('body')">上传字体</button>
+                                <input type="text" id="ra-font-url" class="ra-setting-input" placeholder="字体文件URL" style="flex:1;margin:0;">
+                                <button class="ra-upload-font-btn" onclick="loadFontFromUrl('body')">加载</button>
+                            </div>
+                        </div>
+                        <div class="ra-setting-group">
+                            <label class="ra-setting-label">正文字色</label>
+                            <div class="ra-color-row">
+                                <button class="ra-color-preset" onclick="applyTextColor('#333')" data-color="#333" style="background:#333;" title="深灰"></button>
+                                <button class="ra-color-preset" onclick="applyTextColor('#000')" data-color="#000" style="background:#000;" title="纯黑"></button>
+                                <input type="color" id="ra-textcolor-picker" value="#333333" onchange="applyTextColor(this.value)" class="ra-color-picker">
+                            </div>
+                        </div>
+                        <div class="ra-setting-group">
+                            <label class="ra-setting-label">背景色</label>
+                            <div class="ra-color-row">
+                                <button class="ra-color-preset ra-bg-preset" onclick="applyBgColor('#faf8f5')" data-color="#faf8f5" style="background:#faf8f5;" title="暖白"></button>
+                                <button class="ra-color-preset ra-bg-preset" onclick="applyBgColor('#ffffff')" data-color="#ffffff" style="background:#ffffff;" title="纯白"></button>
+                                <button class="ra-color-preset ra-bg-preset" onclick="applyBgColor('#f5f0e8')" data-color="#f5f0e8" style="background:#f5f0e8;" title="米黄"></button>
+                                <button class="ra-color-preset ra-bg-preset" onclick="applyBgColor('#1a1814')" data-color="#1a1814" style="background:#1a1814;" title="深褐"></button>
+                                <input type="color" id="ra-bgcolor-picker" value="#faf8f5" onchange="applyBgColor(this.value)" class="ra-color-picker">
+                            </div>
+                            <div class="ra-saved-colors" id="ra-saved-bg-colors"></div>
+                            <button class="ra-save-color-btn" onclick="saveBgColorPreset()">保存当前背景色</button>
+                        </div>
+
+                        <!-- 翻页方式 -->
+                        <div class="ra-setting-section-title">翻页方式</div>
+                        <div class="ra-setting-group">
+                            <div class="ra-setting-options" id="ra-pagemode-options">
+                                <button onclick="applyPageMode('scroll')" data-val="scroll" class="active">滚动</button>
+                                <button onclick="applyPageMode('smooth')" data-val="smooth">平滑</button>
+                                <button onclick="applyPageMode('flip')" data-val="flip">仿真</button>
+                            </div>
+                        </div>
+
+                        <!-- 批注外观 -->
+                        <div class="ra-setting-section-title">批注外观</div>
+                        <div class="ra-setting-group">
+                            <label class="ra-setting-label">批注字体</label>
+                            <select id="ra-annfont-select" class="ra-setting-input" onchange="applyAnnotationFont(this.value)">
+                                <option value="inherit">跟随正文</option>
+                                <option value="sans">无衬线</option>
+                                <option value="serif">衬线</option>
+                                <option value="handwriting">手写</option>
+                            </select>
+                        </div>
+                        <div class="ra-setting-group">
+                            <label class="ra-setting-label">批注样式</label>
+                            <div class="ra-setting-options ra-setting-options-sm" id="ra-annstyle-options">
+                                <button onclick="applyAnnotationStyle('line')" data-val="line" class="active">竖线块</button>
+                                <button onclick="applyAnnotationStyle('sticky')" data-val="sticky">便利贴</button>
+                                <button onclick="applyAnnotationStyle('bubble')" data-val="bubble">气泡</button>
+                                <button onclick="applyAnnotationStyle('minimal')" data-val="minimal">极简</button>
+                            </div>
+                        </div>
+                        <div class="ra-setting-group">
+                            <label class="ra-setting-label">批注颜色</label>
+                            <div class="ra-color-row">
+                                <label style="font-size:12px;color:#999;">背景</label>
+                                <input type="color" id="ra-ann-bgcolor" value="#FBF9F4" onchange="applyAnnotationColors()" class="ra-color-picker">
+                                <label style="font-size:12px;color:#999;margin-left:12px;">文字</label>
+                                <input type="color" id="ra-ann-textcolor" value="#666666" onchange="applyAnnotationColors()" class="ra-color-picker">
+                            </div>
+                        </div>
+
+                        <!-- 听书设置 -->
+                        <div class="ra-setting-section-title">听书</div>
+                        <div class="ra-setting-group">
+                            <label class="ra-setting-label" style="display:flex;align-items:center;justify-content:space-between;">
+                                启用听书
+                                <label class="ra-toggle"><input type="checkbox" id="ra-tts-enabled" onchange="saveReadingSettings()"><span class="ra-toggle-slider"></span></label>
+                            </label>
+                        </div>
+                        <div class="ra-setting-group">
+                            <label class="ra-setting-label">TTS 来源</label>
+                            <select id="ra-tts-source" class="ra-setting-input" onchange="onTtsSourceChange()">
+                                <option value="system">系统 TTS</option>
+                                <option value="minimax">MiniMax</option>
+                                <option value="custom">自定义 TTS</option>
+                            </select>
+                        </div>
+                        <div id="ra-tts-minimax-fields" style="display:none;">
+                            <div class="ra-setting-group">
+                                <input type="password" id="ra-tts-minimax-key" class="ra-setting-input" placeholder="MiniMax API Key" oninput="saveReadingSettings()">
+                            </div>
+                            <div class="ra-setting-group">
+                                <input type="text" id="ra-tts-minimax-group" class="ra-setting-input" placeholder="Group ID" oninput="saveReadingSettings()">
+                            </div>
+                        </div>
+                        <div id="ra-tts-custom-fields" style="display:none;">
+                            <div class="ra-setting-group">
+                                <input type="text" id="ra-tts-custom-url" class="ra-setting-input" placeholder="TTS 接口 URL" oninput="saveReadingSettings()">
+                            </div>
+                        </div>
+                        <div class="ra-setting-group">
+                            <label class="ra-setting-label">朗读速度</label>
+                            <div class="ra-setting-options" id="ra-tts-speed-options">
+                                <button onclick="applyTtsSpeed(0.5)" data-val="0.5">0.5x</button>
+                                <button onclick="applyTtsSpeed(1)" data-val="1" class="active">1x</button>
+                                <button onclick="applyTtsSpeed(1.5)" data-val="1.5">1.5x</button>
+                                <button onclick="applyTtsSpeed(2)" data-val="2">2x</button>
+                            </div>
+                        </div>
+
+                        <!-- 其他设置 -->
+                        <div class="ra-setting-section-title">其他</div>
+                        <div class="ra-setting-group">
+                            <label class="ra-setting-label">Anthropic API Key</label>
+                            <input type="password" id="ra-apikey" class="ra-setting-input" placeholder="输入 Anthropic API Key" oninput="saveReadingSettings()">
+                        </div>
                     </div>
+                </div>
+
+                <!-- ======== 选角色面板 ======== -->
+                <div id="char-picker-overlay" class="ra-side-overlay" onclick="closeCharPicker()"></div>
+                <div id="char-picker">
+                    <div class="ra-panel-header">
+                        <span>选择角色</span>
+                        <div class="ra-panel-close" onclick="closeCharPicker()">
+                            <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M1 1l12 12M13 1L1 13" stroke="#333" stroke-width="1.5" stroke-linecap="round"/></svg>
+                        </div>
+                    </div>
+                    <div id="char-picker-list" class="ra-panel-list"></div>
+                </div>
+
+                <!-- ======== 批注完成提示条 ======== -->
+                <div id="annotation-toast" onclick="scrollToLatestAnnotation()">
+                    <span id="annotation-toast-text"></span>
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="margin-left:6px;flex-shrink:0;"><path d="M1 7h12M8 2l5 5-5 5" stroke="#bf9e6a" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </div>
 
             </div>
