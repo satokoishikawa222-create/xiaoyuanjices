@@ -40282,7 +40282,6 @@ document.addEventListener('click', (e) => {
         if (notes[idx]) { notes.splice(idx, 1); saveNotes(notes); }
         closeMarkClickMenu();
     };
-    };
 
     function findChapterForPara(paraIdx) {
         var ch = '未知章节';
